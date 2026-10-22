@@ -33,12 +33,12 @@ Cada regla debe ser verificable. Si una regla implica una proyección, nómbrala
 <!--
 Eventos que ESTE feature produce. Su schema vive en schema/events/<tipo>.vN.json y este
 feature es su dueño. Cambio incompatible = tipo nuevo vN+1, nunca editar vN.
-"productor": app | server | worker:<nombre>
+"productor": app | web | server | worker:<nombre>
 -->
 
 | Tipo | v | Productor | Campos (además de `id`, `user_id`, `ts`, `device_id`) |
 |------|---|-----------|-------------------------------------------------------|
-| `<tipo>` | 1 | app | `campo: tipo` … |
+| `<tipo>` | 1 | app, web | `campo: tipo` … |
 
 ### Eventos consumidos de otros features
 
@@ -66,13 +66,16 @@ y en Go (server/internal/<id>), y ambas deben pasar los fixtures de la sección 
 - **Pantallas:** …
 - **Widget / notificaciones / servicios en background:** …
 - **Permisos:** … (con justificación de una línea cada uno)
+- **Al recibir eventos por sync:** … (qué efectos de dispositivo re-aplicar: alarmas programadas, notificaciones, widgets, foreground services)
 
 ### Server
 - **Endpoints:** Ninguno fuera del sync genérico, salvo: …
 - **Workers:** `<nombre>` — qué eventos lee, qué eventos escribe, cada cuánto corre
 
 ### Web
-- **Vistas:** …
+La web muestra la misma información que la app (consola de administración).
+- **Vistas:** … (qué ve el admin, desde las proyecciones)
+- **Acciones de admin:** … (eventos que produce la web: crear, editar, desactivar, cargar en lote y su formato de archivo)
 
 ## 6. Dependencias y efectos sobre otros features
 
@@ -94,7 +97,8 @@ El agente los escribe PRIMERO, luego hace pasar Kotlin y Go.
 
 ## 8. Fuera de alcance y decisiones
 
-<!-- Lo que deliberadamente NO hace, y decisiones con su porqué en una línea. Evita que el agente "mejore" cosas. -->
+<!-- Lo que deliberadamente NO hace, y decisiones con su porqué en una línea. Evita que el agente "mejore" cosas.
+     Recordatorio: "eliminar" significa desactivación (baja lógica), no borrado, salvo que este SPEC lo justifique. -->
 
 - …
 

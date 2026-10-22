@@ -29,7 +29,7 @@ Ask only what you cannot infer; keep it to a few questions per round. Fill the s
 2. **Proceso de negocio** — numbered, verifiable rules. Push for edge cases: what happens on cancel, on repeat, on a day with no data, after a reinstall.
 3. **Eventos** — one per thing that *happens*, in Spanish snake_case, past tense (`gasto_registrado`). Fields with types. Mark any event this feature needs from another feature under "Eventos consumidos" — then check that feature's spec actually produces it.
 4. **Proyecciones** — every screen or widget is a projection. Name inputs, `params` (always `now` if time matters, `tz` if local dates matter), output shape, and which rules apply.
-5. **Superficies** — Android screens/permissions/background work, server workers, web views. Each Android permission gets a one-line justification.
+5. **Superficies** — Android screens/permissions/background work, and which device effects to re-apply after a sync pull (scheduled alarms, notifications, widgets, foreground services); server workers; web views (from projections) plus the web's admin actions (the events it produces: create, edit, deactivate, bulk load — and the bulk-load file format). Each Android permission gets a one-line justification.
 6. **Fixtures** — at least one case per projection plus one per edge-case rule. List them; do not write the JSON yet unless the owner asks.
 7. **Fuera de alcance** — what it will not do, so `/feature` does not over-build.
 

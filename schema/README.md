@@ -14,7 +14,7 @@ Este directorio no tiene código. Tiene tres cosas y las tres son obligatorias p
 {
   "id": "uuid v7",
   "user_id": "u1",
-  "device_id": "pixel-1 | server | worker:<nombre> | test",
+  "device_id": "pixel-1 | web | server | worker:<nombre> | test",
   "type": "nombre_en_snake_case",
   "v": 1,
   "ts": "2026-10-22T13:05:00Z",

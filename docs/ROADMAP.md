@@ -16,7 +16,7 @@ Reemplaza el Google Sheet. El modelo de bolsas (sobres) se mantiene; lo que camb
 
 ## 3. `sync` + `blobs` (core)
 
-Push/pull con cursor, outbox, subida a R2 con WorkManager. Hasta acá todo funcionó solo en el teléfono; a partir de acá existe el backup y el dashboard.
+Push/pull con cursor, outbox, subida a R2 con WorkManager. Hasta acá todo funcionó solo en el teléfono; a partir de acá existe el backup y la consola de administración web (que escribe). Las escrituras de la web dependen de este ítem: hasta que sync exista, las features de administración web se especifican pero no se implementan.
 
 ## 4. `notas` — texto, audio, foto
 
@@ -24,7 +24,7 @@ Un solo feature con tres tipos de nota. Audio graba local y emite `nota_audio_cr
 
 ## 5. `ubicacion`
 
-Muestreo en background (cada 10 min, ajustable), evento `ubicacion_registrada`. Mapa en el dashboard. Primer feature con permisos incómodos (`ACCESS_BACKGROUND_LOCATION`).
+Muestreo en background (cada 10 min, ajustable), evento `ubicacion_registrada`. Mapa en la web. Primer feature con permisos incómodos (`ACCESS_BACKGROUND_LOCATION`).
 
 ## 6. `insights` (worker)
 

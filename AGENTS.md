@@ -51,7 +51,7 @@ Shared code (`android/core/**`, `server/internal/core/**`, `server/internal/sync
 
 - Kotlin: official style, Compose, no DI framework (manual wiring in `:app`), coroutines + Flow, Room for the event store, kotlinx.serialization for JSON.
 - Go: standard library `net/http` (Go ≥ 1.22 routing), `modernc.org/sqlite` (no cgo), `sqlc` for queries, one package per feature, table-driven tests.
-- Web: TypeScript, Vite, no framework decision yet — see BOOTSTRAP Phase 4. Read-only views; all logic lives server-side.
+- Web: TypeScript, Vite, no framework decision yet — see BOOTSTRAP Phase 4. An admin console over the same data as the app: it reads projections and writes events (create, edit, deactivate, bulk load) via `POST /sync/push`. All projection logic lives server-side.
 - Keep everything smaller than you think it should be. One user. Defer complexity until a real need shows up.
 
 ## Commit messages

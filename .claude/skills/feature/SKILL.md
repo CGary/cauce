@@ -31,7 +31,9 @@ If another feature lists it under "Eventos consumidos", **stop**. Tell the owner
 
 ## 4. Implement
 
-Order: server projections → Android projections (JVM, no Android deps) → Android UI/system → web views. Run tests after each:
+Order: server projections → Android projections (JVM, no Android deps) → Android UI/system + re-apply-after-pull → web admin console (views + admin forms that produce events). Run tests after each:
+
+The web admin console reads projections and writes: its admin forms push events via `POST /sync/push` with `device_id: "web"`, then re-read the projections (no projection logic in the browser). Android re-applies device effects (scheduled alarms, notifications, widgets, foreground services) after a pull that brings events of this feature's types.
 
 ```
 cd server && go test ./...

@@ -18,7 +18,7 @@ schema/              ← EL CONTRATO. Sin código. Schemas de eventos, specs y f
   features/<id>/       SPEC.md + fixtures/<proyección>/<caso>.json
 android/             ← Kotlin + Jetpack Compose. Módulos Gradle por feature.
 server/              ← Go. Un binario: API de sync + workers.
-web/                 ← Dashboard SPA (Cloudflare Pages). Solo lectura.
+web/                 ← Consola de administración (Cloudflare Pages). Lee y escribe.
 docs/                ← Arquitectura, infra, decisiones, roadmap.
 scripts/             ← Linter del contrato y utilidades.
 .claude/skills/      ← Skills para Claude Code (/feature, /new-feature).

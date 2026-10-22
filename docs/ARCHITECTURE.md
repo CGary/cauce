@@ -8,7 +8,7 @@ Consecuencias de diseño:
 
 - No hay "cargando…" en la app salvo para blobs ajenos.
 - El servidor nunca es fuente de verdad de algo que el usuario escribió; solo lo es de lo que generan los workers (transcripciones, insights), y eso también llega al teléfono como eventos.
-- El dashboard web lee del servidor; puede ir unos minutos atrás del teléfono y no importa.
+- La web lee del servidor y le escribe; puede ir unos minutos atrás del teléfono y no importa.
 
 ## 2. Event log
 
@@ -18,7 +18,7 @@ Una sola tabla `events` en ambos lados. Un evento es inmutable y tiene este sobr
 {
   "id": "0192e4a1-7f3c-7a2b-9c1d-4e5f6a7b8c9d",   // UUID v7: ordenable por tiempo
   "user_id": "u1",
-  "device_id": "pixel-1",                   // o "server", "worker:whisper"
+  "device_id": "pixel-1",                   // o "web", "server", "worker:whisper"
   "type": "dosis_dada",
   "v": 1,
   "ts": "2026-10-22T13:05:00Z",                    // cuándo ocurrió, UTC
@@ -37,7 +37,7 @@ Con un usuario, el volumen es trivial (ubicación cada 10 min ≈ 150 eventos/d�
 
 ## 3. Sync
 
-Protocolo mínimo, un usuario, varios dispositivos (teléfono, server, workers):
+Protocolo mínimo, un usuario, varios productores (teléfono, web, server, workers):
 
 ```
 POST /sync/push   { "events": [Envelope, ...] }
@@ -48,8 +48,11 @@ GET  /sync/pull?since=<server_seq>
 ```
 
 - `server_seq` es un entero monótono asignado por el servidor al recibir. Es el cursor; el teléfono guarda el último que vio.
-- El teléfono mantiene un **outbox**: eventos locales con `synced = 0`. `PushPullWorker` (WorkManager, con red, cada 15 min y al abrir la app) hace push del outbox, luego pull desde el cursor, y deduplica por `id` al insertar.
-- Conflictos: no hay estado mutable, así que no hay conflictos de escritura. Dos dispositivos pueden emitir eventos "contradictorios" (p. ej. dos `alarma_modificada`); la proyección decide por `ts`, y el spec del feature documenta la regla.
+- El servidor valida cada evento empujado contra `schema/events/<tipo>.vN.json` y rechaza con 400 si alguno no valida. Misma regla para la app y para la web.
+- El teléfono mantiene un **outbox**: eventos locales con `synced = 0`. `PushPullWorker` (WorkManager, con red, cada 15 min y al abrir la app) hace push del outbox, luego pull desde el cursor, y deduplica por `id` al insertar. Hay además un botón manual "Sincronizar".
+- La web no tiene outbox: envía a `POST /sync/push` con `device_id: "web"`, genera el `id` (UUID v7) y los ids de entidad, y el `ts` sale del reloj del navegador. Si el push falla, muestra el error y el usuario reintenta. Tras un push, relee las proyecciones de `GET /api/projections/...`.
+- Cómo llegan al teléfono los eventos escritos por la web: en el próximo pull (cada 15 min o al abrir la app). No hace falta que lleguen al instante. Todo feature con efectos de dispositivo (alarmas programadas, notificaciones, widgets, foreground services) debe re-aplicar esos efectos tras un pull que traiga eventos de sus tipos; es una regla que cada SPEC declara.
+- Conflictos: un solo usuario, así que **last write wins por `ts`**. Los features modelan las ediciones como eventos de estado completo (como `alarma_modificada`: el estado entero, no un diff), de modo que no hay lógica de merge. Un pequeño skew de reloj entre dispositivos se acepta.
 
 ## 4. Blobs (audio, fotos)
 
@@ -72,7 +75,7 @@ type Worker interface {
 }
 ```
 
-Patrón: **leer eventos pendientes → hacer algo → escribir eventos nuevos**. El worker nunca toca la app ni el dashboard; sus resultados llegan como eventos por el sync normal.
+Patrón: **leer eventos pendientes → hacer algo → escribir eventos nuevos**. El worker nunca toca la app ni la web; sus resultados llegan como eventos por el sync normal.
 
 Ejemplos previstos:
 
@@ -83,9 +86,14 @@ Ejemplos previstos:
 
 Idempotencia: cada worker busca "evento A sin evento B correspondiente", así una corrida interrumpida se retoma sola.
 
-## 6. Dashboard web
+## 6. Consola de administración web
 
-SPA estática en Cloudflare Pages, protegida por Cloudflare Access. Solo lectura. No tiene lógica de proyecciones: llama a `GET /api/projections/{feature}/{name}?param=...` del servidor Go, que ejecuta la misma función que pasó los fixtures. Así el dashboard nunca puede divergir de la app.
+La app y la web contienen la misma información; la app es para uso diario y la web para administrar. La web es una SPA estática en Cloudflare Pages, protegida por Cloudflare Access (login Google), que además de leer **escribe**: produce los mismos tipos de eventos que la app — crear, editar, desactivar y cargar en lote las entidades de cada feature.
+
+- Envía eventos por `POST /sync/push` con `device_id: "web"` (ver §3). No tiene lógica de proyecciones: todas las proyecciones las calcula el servidor, y la web las lee con `GET /api/projections/{feature}/{name}?param=...`, que ejecuta la misma función que pasó los fixtures. Así la web nunca puede divergir de la app.
+- Eliminar es, por defecto, baja lógica (evento de desactivación), porque la historia nunca se borra. Un feature puede definir un evento de borrado real solo si su SPEC lo justifica.
+- Cargar en lote: cada feature que soporta "cargar" define su formato de archivo en su SPEC; la web lo convierte en N eventos de creación. Se prefiere un formato estándar existente cuando lo hay.
+- Las escrituras de la web dependen de sync (ROADMAP 3). Hasta que sync exista, las features de administración web se especifican pero no se implementan.
 
 ## 7. Módulos y aislamiento
 
@@ -102,7 +110,7 @@ Un feature se comunica con otro **solo** produciendo o consumiendo eventos, y es
 
 ## 8. Autenticación
 
-Hoy: un usuario. El servidor solo es alcanzable a través de Cloudflare Tunnel + Access (login con Google para la web; service token para la app). Internamente, `auth.UserFromRequest` devuelve `CAUCE_USER_ID` de la configuración. Es la única función que cambiaría si hubiera auth real; nada más del código sabe cómo se identifica un usuario.
+Un usuario, dos credenciales, una identidad. La web entra con Cloudflare Access (login con Google) y la app con un service token. Ambas llegan al servidor como el mismo usuario: `auth.UserFromRequest` las mapea y `/sync/push` acepta las dos. Internamente devuelve `CAUCE_USER_ID` de la configuración. Es la única función que cambiaría si hubiera auth real; nada más del código sabe cómo se identifica un usuario.
 
 ## 9. Lo que deliberadamente no hay
 

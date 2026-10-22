@@ -41,3 +41,9 @@ Un usuario. Toda la identidad pasa por una función (`auth.UserFromRequest`); si
 ## D10 — Blobs en R2 con presigned URLs, nunca a través del servidor — 2026-10-22
 
 El PC viejo no debe ser cuello de botella de subidas ni guardar fotos en su disco. R2 no cobra egreso y es S3-compatible.
+
+## D11 — La web es consola de administración (escribe), no un dashboard de solo lectura — 2026-10-22
+
+Misma información en app y web; app para uso diario, web para administrar. La web deja de ser solo lectura y pasa a producir los mismos tipos de eventos que la app (crear, editar, desactivar, cargar en lote): los envía por `POST /sync/push` con `device_id: "web"`, sin outbox — si el push falla muestra el error y reintenta — y relee las proyecciones de `GET /api/projections/...`. Sigue sin lógica de proyecciones: el servidor calcula todas. El servidor valida cada evento empujado contra su schema y rechaza inválidos con 400, igual para app y web.
+
+Trade-offs: la web ahora puede escribir datos del negocio, así que deja de ser inofensiva. Se protege con Cloudflare Access (login Google) y comparte identidad con la app (service token) vía `auth.UserFromRequest`; `/sync/push` acepta ambas. Un solo usuario, así que el conflicto se resuelve por `ts` (last write wins): las ediciones se modelan como eventos de estado completo, sin lógica de merge, y se acepta un pequeño skew de reloj. Las escrituras web dependen de sync (ROADMAP 3); hasta que no exista, las features de administración web se especifican pero no se implementan.

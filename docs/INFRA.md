@@ -9,7 +9,7 @@ Objetivo: costo mensual ≈ 0 más el dominio. Todo lo de abajo es reemplazable 
 | Acceso | Cloudflare Access (login Google + service token) | gratis hasta 50 usuarios |
 | Blobs | Cloudflare R2 | gratis hasta 10 GB |
 | Backup DB | Litestream → R2 | gratis |
-| Dashboard | Cloudflare Pages | gratis |
+| Consola de administración | Cloudflare Pages | gratis |
 | Dominio | Cloudflare Registrar o el que tengas | ~US$10/año |
 | Transcripción | whisper.cpp en el PC | gratis |
 

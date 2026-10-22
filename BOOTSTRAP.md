@@ -15,7 +15,7 @@ Verify and print versions. Do not install anything system-wide without asking.
 | JDK | 17 | Android Gradle Plugin |
 | Android SDK + cmdline-tools | API 34 platform, build-tools | compile the app |
 | Go | 1.22 | stdlib router |
-| Node | 20 | web dashboard |
+| Node | 20 | web admin console |
 | Python 3 + `jsonschema` | 3.10 | `scripts/lint_contract.py` |
 | `sqlc` | latest | Go query codegen (optional in phase 2; can be deferred) |
 
@@ -116,16 +116,16 @@ Event append validates the payload against the embedded JSON Schema in debug bui
 
 ---
 
-## Phase 4 — Web dashboard
+## Phase 4 — Web admin console
 
-Vite + TypeScript + Preact (small, no state library). Read-only. Structure:
+Vite + TypeScript + Preact (small, no state library). The web is an admin console over the same data as the app: it reads projections **and writes** — it produces the same event types as the app (create, edit, deactivate, bulk load) by pushing to `POST /sync/push` with `device_id: "web"`. Structure:
 
 ```
-web/src/core/        api client (fetch `/api/projections/...`), layout, auth-less (Cloudflare Access in front)
-web/src/features/alarmas/   adherence table (P2), dose history (P3)
+web/src/core/        api client (fetch `/api/projections/...` and push events), layout, auth-less (Cloudflare Access in front)
+web/src/features/alarmas/   adherence table (P2), dose history (P3), admin forms that produce events
 ```
 
-No projection logic in the browser: it calls the server endpoints from phase 2. `VITE_API_BASE` from env.
+No projection logic in the browser: it calls the server endpoints from phase 2 (the server computes every projection), and re-reads the projections after each push. `VITE_API_BASE` from env.
 
 **Gate 4:** `npm run build` succeeds; dev server shows alarmas adherence against the local Go server. Commit.
 

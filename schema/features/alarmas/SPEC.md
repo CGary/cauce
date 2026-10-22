@@ -47,7 +47,7 @@ Convenciones comunes a las tres: todo `datetime` de entrada y salida es RFC 3339
 **Calendario de disparos** (usado por P1 y P2): el primer disparo es la primera ocurrencia de `hora` estrictamente posterior al `ts` del `alarma_creada`. Luego:
 - `repeticion: null`: solo ese disparo.
 - `DAILY`: cada `interval` días (`1` si se omite) a `hora`.
-- `WEEKLY`: a `hora`, en cada día listado en `byday`; sin `byday`, solo el día de la semana del primer disparo. Con `interval`, solo cuentan las semanas que distan `interval` semanas de la del primer disparo.
+- `WEEKLY` (alineado con RFC 5545, `WKST=MO`): el primer disparo es la primera ocurrencia de `hora` estrictamente posterior al `ts` del `alarma_creada` que caiga en un día listado en `byday`. Sin `byday`, el primer disparo es la primera ocurrencia de `hora` posterior al `ts`, y solo cuenta su día de la semana. Con `interval`, `interval` cuenta semanas del calendario ISO (las semanas empiezan el lunes): solo disparan las semanas que distan un múltiplo de `interval` de la semana que contiene el primer disparo. Ejemplo: alarma creada el viernes 2026-10-23 10:00 local con `hora 08:00`, `byday ["FR"]`, `interval 2` → primer disparo viernes 30-10 08:00, siguiente viernes 13-11 08:00 (caso_07).
 - `HOURLY`: cada `interval` horas desde el primer disparo.
 - `count`: exactamente esa cantidad de disparos, primero incluido. `until`: no hay disparo con fecha local posterior a `until` (es inclusive). `count` y `until` son excluyentes, como en RFC 5545. Sin `count` ni `until`, la repetición no termina.
 - Ejemplo: "cada 8 h por 5 días" se escribe `{"freq": "HOURLY", "interval": 8, "count": 15}`. Con `hora 08:00` y creada el 20 a las 06:30: 15 disparos, del 20 08:00 al 25 00:00.
@@ -127,6 +127,10 @@ Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fu
   - `CATEGORIES` → `tipo` (`remedio` | `reunion` | `otro`; si falta, `otro`).
   - `X-CAUCE-DESTINATARIO` y `X-CAUCE-REMEDIO` → `destinatario` y `remedio`.
 - La exportación produce los dos formatos. En el `.ics` los campos de dominio (`destinatario`, `remedio`) se espejan además en `DESCRIPTION`, porque Google puede descartar las propiedades `X-`. No se usa `VTODO` (Google lo ignora).
+  - Interoperabilidad `HOURLY`: Google Calendar no soporta `FREQ=HOURLY`. Si `interval` divide a 24 (24 es divisible por `n`), se emiten `24/n` VEVENTs, cada uno con `RRULE:FREQ=DAILY` y el mismo `COUNT`/`UNTIL` traducido (`COUNT` repartido entre los VEVENTs), con `DTSTART` a `hora`, `hora+n`, … Ejemplo: cada 8 h desde 08:00 → 3 VEVENTs diarios a 08:00, 16:00 y 00:00. Si 24 no es divisible por `n`, se emite un VEVENT por disparo, sin `RRULE`. Si la alarma no tiene `count` ni `until`, se exportan solo los primeros 30 días.
+  - Interoperabilidad `WEEKLY`: el `DTSTART` debe ser el primer disparo, que por la regla de §4 con `byday` cae en un día listado en `byday`.
+  - `VALARM` se incluye (`ACTION=DISPLAY`, `TRIGGER:PT0M`), pero la exportación es para personas y otros calendarios: Google y Apple pueden ignorar `VALARM` y las propiedades `X-`. La fuente de verdad del timbre es siempre la app, nunca la notificación del calendario.
+  - En importación, un `RRULE` `HOURLY` se acepta (está en el subconjunto), aunque Google nunca lo produce.
 - El parseo ocurre en la web, antes del push. No es una proyección y no tiene fixtures.
 
 ## 6. Dependencias y efectos sobre otros features
@@ -158,7 +162,7 @@ Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fu
 - `alarma_modificada` lleva el estado completo (no un diff) para que P1 no tenga que reconstruir campo por campo; cuesta bytes, ahorra bugs.
 - No hay evento `alarma_borrada`: desactivar es suficiente (2.8).
 - (agente) v1 de `alarma_creada`/`alarma_modificada` nunca se produjo (no hubo implementación); las proyecciones leen solo v2.
-- (agente) `WEEKLY` sin `byday` repite el mismo día de la semana del primer disparo (el comportamiento por defecto de RFC 5545 cuando no hay `BYDAY`); el ancla del ciclo con `interval` es la semana del primer disparo.
+- (agente) `WEEKLY` sin `byday` repite el mismo día de la semana del primer disparo (el comportamiento por defecto de RFC 5545 cuando no hay `BYDAY`); con `interval` el ciclo ancla en la semana — del calendario ISO, que empieza el lunes (`WKST=MO`) — que contiene ese primer disparo (§4).
 - (agente) Al importar `.ics`, la fecha de `DTSTART` se ignora: solo su hora local define `hora`. El calendario de cauce ancla en "primera ocurrencia de `hora` posterior a la creación", no en la fecha original del evento.
 - (agente) No hay borrado duro en la web: **Eliminar** emite `alarma_desactivada` con `motivo: usuario` para que el historial de dosis sobreviva (2.8); la UI lo explica.
 - (agente) El parseo de carga/exportación vive en la web, antes del push; no es una proyección ni tiene fixtures.
@@ -166,4 +170,4 @@ Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fu
 ## 9. Changelog
 
 - `v1` — 2026-10-22 — creación. Fixtures iniciales escritos a mano junto con los schemas.
-- `v2` — 2026-10-22 — la web administra alarmas: alta, edición, baja y carga/exportación en bloque, con eventos por `POST /sync/push` (`device_id: "web"`) que el teléfono aplica al recibir el pull (2.7, 2.9). `repeticion` pasa a subconjunto de RRULE RFC 5545 (`null` = una vez; `count`/`until` excluyentes; `until` inclusive) y se elimina el campo `fin`; schemas nuevos `alarma_creada.v2` y `alarma_modificada.v2`. Fixtures reescritos a v2 y tres casos nuevos: modificación desde web, `until` inclusive y semanal `byday`.
+- `v2` — 2026-10-22 — la web administra alarmas: alta, edición, baja y carga/exportación en bloque, con eventos por `POST /sync/push` (`device_id: "web"`) que el teléfono aplica al recibir el pull (2.7, 2.9). `repeticion` pasa a subconjunto de RRULE RFC 5545 (`null` = una vez; `count`/`until` excluyentes; `until` inclusive) y se elimina el campo `fin`; schemas nuevos `alarma_creada.v2` y `alarma_modificada.v2`. Fixtures reescritos a v2 y tres casos nuevos: modificación desde web, `until` inclusive y semanal `byday`. Aclaraciones (sin cambios de versión, v2 aún sin implementar): regla `WEEKLY` precisa y alineada con RFC 5545 (interval cuenta semanas ISO, anclada en la semana del primer disparo); reglas de interoperabilidad de exportación `.ics` (HOURLY desdoblado en VEVENTs DAILY, DTSTART de WEEKLY en el primer disparo, VALARM/X- opcionales en el receptor, import acepta HOURLY).

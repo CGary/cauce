@@ -116,18 +116,35 @@ Event append validates the payload against the embedded JSON Schema in debug bui
 
 ---
 
-## Phase 4 — Web admin console
+## Phase 4 — Web admin console (React)
 
-Vite + TypeScript + Preact (small, no state library). The web is an admin console over the same data as the app: it reads projections **and writes** — it produces the same event types as the app (create, edit, deactivate, bulk load) by pushing to `POST /sync/push` with `device_id: "web"`. Structure:
+Stack, pinned to exact versions in `web/package.json` (do not add anything else without asking the owner):
+
+- Vite + React 19 + TypeScript (`strict`, `noUncheckedIndexedAccess`). No Preact, Astro, Next or SSR; `vite.config.ts` documents the `preact/compat` alias as a future bundle-size experiment, inactive.
+- TanStack Query for all data access (`staleTime` 60 s, `refetchOnWindowFocus`). React Router for routes.
+- Tailwind v4. No component library, no state manager, no form library. UI state that must survive a reload lives in the URL (search params).
+- Chart.js and MapLibre only when a view needs them, loaded with `React.lazy` per route so they never enter the initial bundle.
+- Vitest + Testing Library + MSW for unit and component tests; Playwright for one smoke test with screenshots (browsers installed inside the project: `PLAYWRIGHT_BROWSERS_PATH=0`).
+- ESLint (typescript-eslint, react-hooks) + Prettier.
+
+Structure:
 
 ```
-web/src/core/        api client (fetch `/api/projections/...` and push events), layout, auth-less (Cloudflare Access in front)
-web/src/features/alarmas/   adherence table (P2), dose history (P3), admin forms that produce events
+web/src/main.tsx              QueryClient, router, mocks only in `--mode mock`
+web/src/core/api.ts           typed fetch to ${VITE_API_BASE}/api/projections/{feature}/{name}?params
+web/src/core/ui/              Page, Card, Table, Stat, DateRange, EmptyState, ErrorState, Spinner, SectionHeader, Chip, QueryState
+web/src/core/layout.tsx       navigation built from the feature registry (passed in; core never imports features)
+web/src/core/routes.tsx       one route per projection view: /{feature}/{view}
+web/src/features/index.ts     FEATURES: FeatureModule[], explicit list, same as Android
+web/src/features/<id>/        types.ts (projection output shapes, field by field from SPEC §4), api.ts, views/, mocks.ts
+web/src/mocks/                MSW worker/server; feature handlers serve the `expected` values of schema/features/<id>/fixtures
 ```
 
-No projection logic in the browser: it calls the server endpoints from phase 2 (the server computes every projection), and re-reads the projections after each push. `VITE_API_BASE` from env.
+Rules: `features/<id>/` imports only from `core/` (tests may also use `src/test` and `src/mocks`); `core/` never imports from `features/`. A local ESLint rule (`cauce/boundaries`) enforces it. No projection logic in the browser: views render what the server computes. Every view has loading, error (HTTP status + retry) and empty states from `core/ui`. Admin forms that push events come after sync (ROADMAP item 3).
 
-**Gate 4:** `npm run build` succeeds; dev server shows alarmas adherence against the local Go server. Commit.
+`VITE_API_BASE` comes from `.env` (`.env.example` is committed, `.env` is ignored). In dev, Vite proxies `/api` to `http://localhost:8080`. `npm run dev:mock` runs the UI against MSW, without the Go server.
+
+**Gate 4:** `make test-web` green (tsc, eslint, vitest), `npm run build` succeeds, and `npm run e2e` passes and writes `web/e2e/screenshots/alarmas.png`. Report the initial chunk size from `vite build`. Commit `web: react dashboard scaffold`.
 
 ---
 

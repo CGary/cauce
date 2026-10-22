@@ -59,7 +59,7 @@ The web push client (UUID v7 ids, `ts` from the browser clock, error handling) i
 
 - Kotlin: official style, Compose, no DI framework (manual wiring in `:app`), coroutines + Flow, Room for the event store, kotlinx.serialization for JSON.
 - Go: standard library `net/http` (Go ≥ 1.22 routing), `modernc.org/sqlite` (no cgo), `sqlc` for queries, one package per feature, table-driven tests.
-- Web: TypeScript, Vite, no framework decision yet — see BOOTSTRAP Phase 4. An admin console over the same data as the app: it reads projections and writes events (create, edit, deactivate, bulk load) via `POST /sync/push`. All projection logic lives server-side.
+- Web: Vite + React 19 + TypeScript (`strict`, `noUncheckedIndexedAccess`), TanStack Query for all data access, React Router, Tailwind v4. No component library, no state manager, no form library, no SSR. Chart.js/MapLibre only via per-route `React.lazy`. Tests: Vitest + Testing Library + MSW (fixtures as data), one Playwright smoke test. ESLint (typescript-eslint, react-hooks) + Prettier. Exact version pins. It is an admin console over the same data as the app: it reads projections and writes events (create, edit, deactivate, bulk load) via `POST /sync/push`. All projection logic lives server-side. See BOOTSTRAP Phase 4.
 - Keep everything smaller than you think it should be. One user. Defer complexity until a real need shows up.
 
 ## Commit messages

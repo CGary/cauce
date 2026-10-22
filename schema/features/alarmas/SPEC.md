@@ -166,6 +166,8 @@ Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fu
 - (agente) Al importar `.ics`, la fecha de `DTSTART` se ignora: solo su hora local define `hora`. El calendario de cauce ancla en "primera ocurrencia de `hora` posterior a la creación", no en la fecha original del evento.
 - (agente) No hay borrado duro en la web: **Eliminar** emite `alarma_desactivada` con `motivo: usuario` para que el historial de dosis sobreviva (2.8); la UI lo explica.
 - (agente) El parseo de carga/exportación vive en la web, antes del push; no es una proyección ni tiene fixtures.
+- (agente) La web pide P2 con `tz` = zona IANA del navegador y **sin** `now`: el endpoint `GET /api/projections/...` usa el reloj del servidor cuando falta `now`. Así la clave de caché no cambia en cada render y la proyección sigue siendo pura (el `now` lo inyecta el servidor, no la función).
+- (agente) El filtro por destinatario de la tabla de adherencia (P2) es de presentación, en la web: P2 no recibe `destinatario` como param. En el historial (P3) el destinatario sí viaja como param de la proyección.
 
 ## 9. Changelog
 

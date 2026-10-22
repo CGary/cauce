@@ -33,6 +33,9 @@ android/.kotlin/
 web/node_modules/
 web/dist/
 web/.vite/
+web/test-results/
+web/playwright-report/
+web/e2e/screenshots/
 
 # Python (solo scripts/)
 __pycache__/

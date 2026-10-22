@@ -8,16 +8,14 @@
     {
       "id": "e1",
       "type": "alarma_creada",
-      "v": 1,
+      "v": 2,
       "ts": "2026-10-20T15:00:00Z",
       "payload": {
         "alarma_id": "a6",
         "titulo": "Vieja",
         "tipo": "otro",
         "hora": "08:00",
-        "repeticion": {
-          "tipo": "diaria"
-        }
+        "repeticion": { "freq": "DAILY" }
       }
     },
     {
@@ -33,21 +31,14 @@
     {
       "id": "e3",
       "type": "alarma_creada",
-      "v": 1,
+      "v": 2,
       "ts": "2026-10-20T15:00:00Z",
       "payload": {
         "alarma_id": "a7",
         "titulo": "Reunión",
         "tipo": "reunion",
         "hora": "10:00",
-        "repeticion": {
-          "tipo": "dias_semana",
-          "dias": [
-            1,
-            3,
-            5
-          ]
-        }
+        "repeticion": { "freq": "WEEKLY", "byday": ["MO", "WE", "FR"] }
       }
     }
   ],
@@ -57,15 +48,7 @@
       "titulo": "Reunión",
       "tipo": "reunion",
       "hora": "10:00",
-      "repeticion": {
-        "tipo": "dias_semana",
-        "dias": [
-          1,
-          3,
-          5
-        ]
-      },
-      "fin": null,
+      "repeticion": { "freq": "WEEKLY", "byday": ["MO", "WE", "FR"] },
       "proximo_disparo": "2026-10-23T14:00:00Z"
     }
   ]

@@ -1,0 +1,45 @@
+{
+  "projection": "alarmas.alarmas_activas",
+  "params": {
+    "now": "2026-10-23T11:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-20T15:00:00Z",
+      "payload": {
+        "alarma_id": "b1",
+        "titulo": "Termina el 22",
+        "tipo": "otro",
+        "hora": "20:00",
+        "repeticion": { "freq": "DAILY", "until": "2026-10-22" }
+      }
+    },
+    {
+      "id": "e2",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-20T15:00:00Z",
+      "payload": {
+        "alarma_id": "b2",
+        "titulo": "Termina el 23",
+        "tipo": "otro",
+        "hora": "20:00",
+        "repeticion": { "freq": "DAILY", "until": "2026-10-23" }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "b2",
+      "titulo": "Termina el 23",
+      "tipo": "otro",
+      "hora": "20:00",
+      "repeticion": { "freq": "DAILY", "until": "2026-10-23" },
+      "proximo_disparo": "2026-10-24T00:00:00Z"
+    }
+  ]
+}

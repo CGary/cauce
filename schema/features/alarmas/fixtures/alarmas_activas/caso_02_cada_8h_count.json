@@ -8,18 +8,14 @@
     {
       "id": "e1",
       "type": "alarma_creada",
-      "v": 1,
+      "v": 2,
       "ts": "2026-10-20T10:30:00Z",
       "payload": {
         "alarma_id": "a3",
         "titulo": "Amoxicilina Juan",
         "tipo": "remedio",
         "hora": "08:00",
-        "repeticion": {
-          "tipo": "cada_n_horas",
-          "n": 8
-        },
-        "fin": "2026-10-24",
+        "repeticion": { "freq": "HOURLY", "interval": 8, "count": 15 },
         "destinatario": "Juan",
         "remedio": "Amoxicilina"
       }
@@ -27,18 +23,14 @@
     {
       "id": "e2",
       "type": "alarma_creada",
-      "v": 1,
+      "v": 2,
       "ts": "2026-10-20T10:30:00Z",
       "payload": {
         "alarma_id": "a4",
         "titulo": "Ibuprofeno Ana",
         "tipo": "remedio",
         "hora": "08:00",
-        "repeticion": {
-          "tipo": "cada_n_horas",
-          "n": 8
-        },
-        "fin": "2026-10-21",
+        "repeticion": { "freq": "HOURLY", "interval": 8, "count": 3 },
         "destinatario": "Ana",
         "remedio": "Ibuprofeno"
       }
@@ -50,11 +42,7 @@
       "titulo": "Amoxicilina Juan",
       "tipo": "remedio",
       "hora": "08:00",
-      "repeticion": {
-        "tipo": "cada_n_horas",
-        "n": 8
-      },
-      "fin": "2026-10-24",
+      "repeticion": { "freq": "HOURLY", "interval": 8, "count": 15 },
       "proximo_disparo": "2026-10-22T12:00:00Z"
     }
   ]

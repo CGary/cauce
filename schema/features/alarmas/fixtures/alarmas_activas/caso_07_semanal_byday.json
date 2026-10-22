@@ -1,0 +1,53 @@
+{
+  "projection": "alarmas.alarmas_activas",
+  "params": {
+    "now": "2026-11-06T11:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-20T15:00:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "titulo": "Equipo lunes y miércoles",
+        "tipo": "reunion",
+        "hora": "10:00",
+        "repeticion": { "freq": "WEEKLY", "byday": ["MO", "WE"] }
+      }
+    },
+    {
+      "id": "e2",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-23T14:00:00Z",
+      "payload": {
+        "alarma_id": "c2",
+        "titulo": "Quincenal viernes",
+        "tipo": "reunion",
+        "hora": "08:00",
+        "repeticion": { "freq": "WEEKLY", "interval": 2, "byday": ["FR"] }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "c1",
+      "titulo": "Equipo lunes y miércoles",
+      "tipo": "reunion",
+      "hora": "10:00",
+      "repeticion": { "freq": "WEEKLY", "byday": ["MO", "WE"] },
+      "proximo_disparo": "2026-11-09T14:00:00Z"
+    },
+    {
+      "alarma_id": "c2",
+      "titulo": "Quincenal viernes",
+      "tipo": "reunion",
+      "hora": "08:00",
+      "repeticion": { "freq": "WEEKLY", "interval": 2, "byday": ["FR"] },
+      "proximo_disparo": "2026-11-13T12:00:00Z"
+    }
+  ]
+}

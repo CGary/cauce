@@ -8,18 +8,14 @@
     {
       "id": "e1",
       "type": "alarma_creada",
-      "v": 1,
+      "v": 2,
       "ts": "2026-10-20T10:30:00Z",
       "payload": {
         "alarma_id": "t1",
         "titulo": "Amoxicilina Juan",
         "tipo": "remedio",
         "hora": "08:00",
-        "repeticion": {
-          "tipo": "cada_n_horas",
-          "n": 8
-        },
-        "fin": "2026-10-24",
+        "repeticion": { "freq": "HOURLY", "interval": 8, "count": 15 },
         "destinatario": "Juan",
         "remedio": "Amoxicilina"
       }

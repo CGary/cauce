@@ -30,10 +30,17 @@ The spec describes the **desired state**, never a change request. Your job is to
 
 Shared code (`android/core/**`, `server/internal/core/**`, `server/internal/sync/**`, `web/src/core/**`) is **not** owned by any feature. Change it only when the task is explicitly about the core, and say so in your summary. If a feature seems to need a core change, stop and ask; the usual answer is that the feature should do it locally.
 
+The web push client (UUID v7 ids, `ts` from the browser clock, error handling) is shared and lives in `web/src/core/`. A feature writes its admin forms and its own event builders under `web/src/features/<id>/`; if it needs a capability the push client does not have, stop and ask.
+
 ## Hard rules
 
 - **Never edit a published event schema.** A breaking change is a new file `<tipo>.v(N+1).json`. Additive optional fields are allowed on the same version. Both app and server must ignore unknown fields.
 - **Cross-feature events.** Before changing any event in SPEC section 3, grep `schema/features/*/SPEC.md` for consumers. If another feature lists it under "Eventos consumidos", STOP and ask for that feature's spec. The two are launched together.
+- **The web is a producer, not a mirror.** Admin actions in the web are events, not local UI state: build the envelope, push it with `POST /sync/push` (`device_id: "web"`), then re-read the projections. The server validates every pushed event against its schema and rejects invalid ones with 400. Never re-implement projection logic in the browser to make a form look right.
+- **Edits are full-state events.** App and web both write, so conflicts resolve by newest `ts`. Model an edit as the complete state (like `alarma_modificada`), not a diff, so last-`ts`-wins needs no merge logic. Small clock skew between devices is accepted; do not add CRDTs.
+- **"Delete" means deactivate.** The default is a deactivation event, because history is never erased. A real delete event only exists if the feature's SPEC section 8 justifies it.
+- **Re-apply device effects after a pull.** Events written in the web reach the phone on the next pull (`PushPullWorker`, or the "Sincronizar" button). A feature with device-side effects (scheduled alarms, notifications, widgets, foreground services) re-applies them after a pull that brings events of its types. SPEC section 5 states which ones; it is not optional.
+- **Web writes depend on sync** (ROADMAP item 3). Until `/sync/push` exists in the server, specify the web admin actions in SPEC section 5 and do not implement them.
 - **Projections are pure.** `(events, params) -> result`. No clock, no random, no I/O. Time comes in as `params.now`. This is what makes fixtures deterministic.
 - **Do not add dependencies between feature modules.** Gradle enforces it on Android; keep Go packages flat under `internal/<id>` with no imports between features. Features talk only through events.
 - **No new infrastructure.** No Lambda, no managed queues, no extra databases. The server is one Go binary with SQLite; workers are goroutines. If you believe infra is required, write the reason in `docs/DECISIONS.md` as a proposal and stop.
@@ -45,6 +52,7 @@ Shared code (`android/core/**`, `server/internal/core/**`, `server/internal/sync
 - `python3 scripts/lint_contract.py` passes.
 - `cd server && go test ./...` passes.
 - `cd android && ./gradlew :core:events:test :feature:<id>:test` passes (JVM only; no emulator required).
+- If the feature has web admin actions and `web/` is bootstrapped, `npm run build` in `web/` passes.
 - If you changed UI, build the debug APK once (`./gradlew :app:assembleDebug`) and report the path. Do not install anything.
 
 ## Style

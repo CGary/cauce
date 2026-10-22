@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/envelope.v1.json",
+  "title": "Sobre de evento",
+  "description": "Estructura común de todo evento del log. El payload se valida aparte contra events/<type>.v<v>.json.",
+  "type": "object",
+  "required": ["id", "user_id", "device_id", "type", "v", "ts", "payload"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Único global. UUID v7 en producción; cualquier string corto en fixtures."
+    },
+    "user_id": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Origen: nombre del dispositivo, 'server', 'worker:<nombre>' o 'test'."
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Tipo de evento en snake_case, en español."
+    },
+    "v": { "type": "integer", "minimum": 1 },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Cuándo ocurrió, RFC 3339 en UTC."
+    },
+    "payload": { "type": "object" },
+    "server_seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Asignado por el servidor al recibir. Solo presente en respuestas de /sync/pull."
+    }
+  }
+}

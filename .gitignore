@@ -1,0 +1,44 @@
+# secretos
+.env
+*.secret
+*.pem
+*.key
+*.p12
+*.pfx
+key.properties
+signing.properties
+.cloudflared/
+
+# Go
+server/cauce
+server/*.db
+server/*.db-*
+server/data/
+
+# Android
+android/.gradle/
+android/build/
+android/**/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/**/*.iml
+android/.kotlin/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# Web
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Python (solo scripts/)
+__pycache__/
+*.pyc
+
+# editores / SO
+.DS_Store
+.vscode/
+*.swp

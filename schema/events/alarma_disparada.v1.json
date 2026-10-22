@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/alarma_disparada.v1.json",
+  "title": "alarma_disparada",
+  "description": "El sistema hizo sonar la alarma. Feature dueño: alarmas.",
+  "type": "object",
+  "required": ["alarma_id", "programada_para"],
+  "properties": {
+    "alarma_id": { "type": "string", "minLength": 1 },
+    "programada_para": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Instante nominal del disparo (no el real). Identifica la ocurrencia; una dosis cuenta una vez por este valor."
+    }
+  }
+}

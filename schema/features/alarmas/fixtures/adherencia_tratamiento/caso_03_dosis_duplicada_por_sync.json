@@ -1,0 +1,63 @@
+{
+  "projection": "alarmas.adherencia_tratamiento",
+  "params": {
+    "now": "2026-10-20T21:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 1,
+      "ts": "2026-10-20T10:30:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "titulo": "Amoxicilina Juan",
+        "tipo": "remedio",
+        "hora": "08:00",
+        "repeticion": {
+          "tipo": "cada_n_horas",
+          "n": 8
+        },
+        "fin": "2026-10-24",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina"
+      }
+    },
+    {
+      "id": "d0",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-20T12:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-20T12:00:00Z"
+      }
+    },
+    {
+      "id": "d0bis",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-20T12:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-20T12:00:00Z"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "t1",
+      "destinatario": "Juan",
+      "remedio": "Amoxicilina",
+      "dosis_esperadas": 2,
+      "dosis_dadas": 1,
+      "ignoradas": 0,
+      "ultima_dosis": "2026-10-20T12:05:00Z"
+    }
+  ]
+}

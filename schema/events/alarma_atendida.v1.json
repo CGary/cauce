@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/alarma_atendida.v1.json",
+  "title": "alarma_atendida",
+  "description": "Qué hizo el usuario con un disparo. Feature dueño: alarmas.",
+  "type": "object",
+  "required": ["alarma_id", "programada_para", "accion"],
+  "properties": {
+    "alarma_id": { "type": "string", "minLength": 1 },
+    "programada_para": { "type": "string", "format": "date-time" },
+    "accion": { "type": "string", "enum": ["hecho", "pospuesta", "ignorada"] },
+    "pospuesta_n": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3,
+      "description": "Número de posposición (1..3). Solo accion = pospuesta."
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "accion": { "const": "pospuesta" } } }, "then": { "required": ["pospuesta_n"] } }
+  ]
+}

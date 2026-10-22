@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/dosis_dada.v1.json",
+  "title": "dosis_dada",
+  "description": "Se administró una dosis de un remedio. Lo emite la app al tocar Hecho en una alarma de tipo remedio. Feature dueño: alarmas.",
+  "type": "object",
+  "required": ["alarma_id", "destinatario", "remedio", "programada_para"],
+  "properties": {
+    "alarma_id": { "type": "string", "minLength": 1 },
+    "destinatario": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "remedio": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "programada_para": { "type": "string", "format": "date-time" }
+  }
+}

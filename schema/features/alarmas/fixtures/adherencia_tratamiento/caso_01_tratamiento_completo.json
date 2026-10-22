@@ -1,0 +1,219 @@
+{
+  "projection": "alarmas.adherencia_tratamiento",
+  "params": {
+    "now": "2026-10-26T04:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 1,
+      "ts": "2026-10-20T10:30:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "titulo": "Amoxicilina Juan",
+        "tipo": "remedio",
+        "hora": "08:00",
+        "repeticion": {
+          "tipo": "cada_n_horas",
+          "n": 8
+        },
+        "fin": "2026-10-24",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina"
+      }
+    },
+    {
+      "id": "d0",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-20T12:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-20T12:00:00Z"
+      }
+    },
+    {
+      "id": "d1",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-20T20:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-20T20:00:00Z"
+      }
+    },
+    {
+      "id": "d2",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-21T04:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-21T04:00:00Z"
+      }
+    },
+    {
+      "id": "d3",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-21T12:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-21T12:00:00Z"
+      }
+    },
+    {
+      "id": "d4",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-21T20:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-21T20:00:00Z"
+      }
+    },
+    {
+      "id": "d5",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-22T04:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-22T04:00:00Z"
+      }
+    },
+    {
+      "id": "d6",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-22T12:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-22T12:00:00Z"
+      }
+    },
+    {
+      "id": "d7",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-22T20:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-22T20:00:00Z"
+      }
+    },
+    {
+      "id": "d8",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-23T04:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-23T04:00:00Z"
+      }
+    },
+    {
+      "id": "d9",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-23T12:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-23T12:00:00Z"
+      }
+    },
+    {
+      "id": "d10",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-23T20:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-23T20:00:00Z"
+      }
+    },
+    {
+      "id": "d11",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-24T04:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-24T04:00:00Z"
+      }
+    },
+    {
+      "id": "d12",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-24T12:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-24T12:00:00Z"
+      }
+    },
+    {
+      "id": "d13",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-24T20:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-24T20:00:00Z"
+      }
+    },
+    {
+      "id": "d14",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-25T04:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-25T04:00:00Z"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "t1",
+      "destinatario": "Juan",
+      "remedio": "Amoxicilina",
+      "dosis_esperadas": 15,
+      "dosis_dadas": 15,
+      "ignoradas": 0,
+      "ultima_dosis": "2026-10-25T04:05:00Z"
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "projection": "alarmas.historial_dosis",
+  "params": {
+    "destinatario": "Juan"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 1,
+      "ts": "2026-10-20T10:30:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "titulo": "Amoxicilina Juan",
+        "tipo": "remedio",
+        "hora": "08:00",
+        "repeticion": {
+          "tipo": "cada_n_horas",
+          "n": 8
+        },
+        "fin": "2026-10-24",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina"
+      }
+    },
+    {
+      "id": "e2",
+      "type": "alarma_creada",
+      "v": 1,
+      "ts": "2026-10-20T10:30:00Z",
+      "payload": {
+        "alarma_id": "t2",
+        "titulo": "Ibuprofeno Ana",
+        "tipo": "remedio",
+        "hora": "09:00",
+        "repeticion": {
+          "tipo": "cada_n_horas",
+          "n": 12
+        },
+        "fin": "2026-10-22",
+        "destinatario": "Ana",
+        "remedio": "Ibuprofeno"
+      }
+    },
+    {
+      "id": "d0",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-20T12:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-20T12:00:00Z"
+      }
+    },
+    {
+      "id": "x0",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-20T13:05:00Z",
+      "payload": {
+        "alarma_id": "t2",
+        "destinatario": "Ana",
+        "remedio": "Ibuprofeno",
+        "programada_para": "2026-10-20T13:00:00Z"
+      }
+    },
+    {
+      "id": "d1",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-20T20:05:00Z",
+      "payload": {
+        "alarma_id": "t1",
+        "destinatario": "Juan",
+        "remedio": "Amoxicilina",
+        "programada_para": "2026-10-20T20:00:00Z"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "ts": "2026-10-20T20:05:00Z",
+      "destinatario": "Juan",
+      "remedio": "Amoxicilina"
+    },
+    {
+      "ts": "2026-10-20T12:05:00Z",
+      "destinatario": "Juan",
+      "remedio": "Amoxicilina"
+    }
+  ]
+}

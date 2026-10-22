@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/alarma_desactivada.v1.json",
+  "title": "alarma_desactivada",
+  "description": "La alarma deja de programarse. No se borra: su historial sigue visible. Feature dueño: alarmas.",
+  "type": "object",
+  "required": ["alarma_id", "motivo"],
+  "properties": {
+    "alarma_id": { "type": "string", "minLength": 1 },
+    "motivo": { "type": "string", "enum": ["usuario", "fin_tratamiento", "una_vez_atendida"] }
+  }
+}

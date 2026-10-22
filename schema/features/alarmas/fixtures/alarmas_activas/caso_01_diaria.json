@@ -1,0 +1,63 @@
+{
+  "projection": "alarmas.alarmas_activas",
+  "params": {
+    "now": "2026-10-22T11:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 1,
+      "ts": "2026-10-20T15:00:00Z",
+      "payload": {
+        "alarma_id": "a1",
+        "titulo": "Vitaminas",
+        "tipo": "otro",
+        "hora": "08:00",
+        "repeticion": {
+          "tipo": "diaria"
+        }
+      }
+    },
+    {
+      "id": "e2",
+      "type": "alarma_creada",
+      "v": 1,
+      "ts": "2026-10-20T15:00:00Z",
+      "payload": {
+        "alarma_id": "a2",
+        "titulo": "Despertar",
+        "tipo": "otro",
+        "hora": "06:00",
+        "repeticion": {
+          "tipo": "diaria"
+        }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "a1",
+      "titulo": "Vitaminas",
+      "tipo": "otro",
+      "hora": "08:00",
+      "repeticion": {
+        "tipo": "diaria"
+      },
+      "fin": null,
+      "proximo_disparo": "2026-10-22T12:00:00Z"
+    },
+    {
+      "alarma_id": "a2",
+      "titulo": "Despertar",
+      "tipo": "otro",
+      "hora": "06:00",
+      "repeticion": {
+        "tipo": "diaria"
+      },
+      "fin": null,
+      "proximo_disparo": "2026-10-23T10:00:00Z"
+    }
+  ]
+}

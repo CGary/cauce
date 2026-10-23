@@ -1,0 +1,26 @@
+services:
+  cauce:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file:
+      - path: ./server/.env
+        required: false
+    environment:
+      CAUCE_ADDR: ":8080"
+      CAUCE_DB_PATH: /data/cauce.db
+    user: "${CAUCE_UID:-1000}:${CAUCE_GID:-1000}"
+    volumes:
+      - "${CAUCE_DATA_DIR:-./deploy/data}:/data"
+    ports:
+      - "127.0.0.1:${CAUCE_HOST_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:2025.8.1
+    profiles: [tunnel]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    command: tunnel --no-autoupdate run
+    depends_on:
+      - cauce

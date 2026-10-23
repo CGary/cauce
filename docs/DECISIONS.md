@@ -51,3 +51,9 @@ Trade-offs: la web ahora puede escribir datos del negocio, así que deja de ser 
 ## D12 — Las claves de blobs deben venir bajo `<user_id>/`; no se prefijan — 2026-10-22
 
 (agente) El servidor rechaza con 400 cualquier clave de `POST /blobs/presign` que no empiece con `<user_id>/`, en vez de anteponerle el prefijo. Prefijar en silencio hace que el cliente crea que subió a una ruta distinta de la real y esconde un error de programación; rechazar mantiene una sola forma de construir la clave y deja el aislamiento por usuario en una validación explícita.
+
+## D13 — Docker Compose como empaquetado portable — 2026-10-23
+
+El servidor corre en Docker Compose para poder moverlo entre máquinas Linux con un `git clone` y un comando de arranque. Docker es empaquetado, no infraestructura nueva: el estado sigue estando únicamente en SQLite y `server/.env`. Esto reemplaza el enfoque anterior de binario + systemd en el PC viejo y supersede el deploy por `scp` del binario descrito en D2: ahora se mueve un tarball con la base y el entorno, no el ejecutable. El túnel ya corre en Compose (perfil `tunnel`); Litestream se moverá más adelante.
+
+Trade-offs: Docker agrega una dependencia de empaquetado (imagen, Compose y permisos de UID/GID) a cambio de un arranque reproducible en cualquier Linux con `git clone` y `make up`. La imagen no guarda estado: la base vive en `deploy/data/` y la configuración en `server/.env`, así que el backup sigue siendo un tarball de esos dos. Compose fuerza `CAUCE_ADDR` y `CAUCE_DB_PATH` para que un `.env` de desarrollo no rompa el contenedor. El túnel ya corre en Compose; Litestream todavía no.

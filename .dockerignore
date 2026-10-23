@@ -1,0 +1,12 @@
+**/data/
+**/node_modules/
+**/build/
+**/.gradle/
+**/dist/
+**/.git/
+**/*.db
+**/*.db-*
+server/.env
+android/.idea/
+web/.vite/
+*.tar.gz

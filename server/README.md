@@ -1,7 +1,7 @@
 # server/
 
 Single Go binary: HTTP API, SQLite event log, R2 presigning and background
-workers. No Docker, no extra infrastructure. See `docs/ARCHITECTURE.md` §3–§5
+workers. Docker is packaging only, not extra infrastructure. See `docs/ARCHITECTURE.md` §3–§5
 and `docs/INFRA.md` for deployment.
 
 ## Layout
@@ -27,7 +27,7 @@ no feature implementation.
 ## Configuration
 
 All configuration is environment-only. Copy `.env.example` to `.env` (ignored by
-git) and export it, or let systemd read it:
+git) and export it:
 
 ```bash
 set -a; . ./.env; set +a
@@ -55,8 +55,14 @@ go build -o cauce ./cmd/cauce
 ./cauce
 ```
 
-Or `make server-run` from the repository root. The binary name and paths match
-`docs/INFRA.md`.
+Or `make server-run` from the repository root.
+
+## Docker
+
+From the repository root, `make up` creates `server/.env` when needed, builds
+the pinned image and starts the server with its database in `deploy/data/`.
+Use `make backup` and `make restore FILE=...` to move the state to another
+machine. The optional Cloudflare Tunnel is started with the `tunnel` profile.
 
 ## Schema embedding
 

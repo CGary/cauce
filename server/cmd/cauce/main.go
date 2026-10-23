@@ -6,6 +6,8 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -26,9 +28,51 @@ import (
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.LUTC)
-	if err := run(); err != nil {
+	var err error
+	switch {
+	case len(os.Args) > 1 && os.Args[1] == "snapshot":
+		err = snapshotCommand(os.Args[2:])
+	case len(os.Args) > 1 && os.Args[1] == "check":
+		err = checkCommand(os.Args[2:])
+	default:
+		err = run()
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func snapshotCommand(args []string) error {
+	flags := flag.NewFlagSet("snapshot", flag.ContinueOnError)
+	destination := flags.String("o", "", "snapshot destination")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *destination == "" {
+		return fmt.Errorf("snapshot requires -o <path>")
+	}
+	dbPath := os.Getenv("CAUCE_DB_PATH")
+	if dbPath == "" {
+		dbPath = "cauce.db"
+	}
+	return store.Snapshot(context.Background(), dbPath, *destination)
+}
+
+func checkCommand(args []string) error {
+	flags := flag.NewFlagSet("check", flag.ContinueOnError)
+	dbPath := flags.String("db", "", "database path")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *dbPath == "" {
+		return fmt.Errorf("check requires -db <path>")
+	}
+	count, err := store.Check(context.Background(), *dbPath)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("events: %d\n", count)
+	return nil
 }
 
 func run() error {

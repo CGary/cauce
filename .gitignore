@@ -14,6 +14,9 @@ server/cauce
 server/*.db
 server/*.db-*
 server/data/
+deploy/data/
+deploy/data.prev-*/
+cauce-backup-*.tar.gz
 
 # Android
 android/.gradle/

@@ -4,7 +4,7 @@ Objetivo: costo mensual ≈ 0 más el dominio. Todo lo de abajo es reemplazable 
 
 | Pieza | Servicio | Costo |
 |-------|----------|-------|
-| Backend | PC viejo con Linux, un binario Go | luz |
+| Backend | PC viejo con Linux, Docker Compose | luz |
 | Exposición | Cloudflare Tunnel (`cloudflared`) | gratis |
 | Acceso | Cloudflare Access (login Google + service token) | gratis hasta 50 usuarios |
 | Blobs | Cloudflare R2 | gratis hasta 10 GB |
@@ -15,39 +15,25 @@ Objetivo: costo mensual ≈ 0 más el dominio. Todo lo de abajo es reemplazable 
 
 ## PC viejo
 
-Linux mínimo (Debian/Ubuntu Server). Sin Docker: un binario estático y `systemd`.
+Linux mínimo (Debian/Ubuntu Server) con Docker Compose. `make up` construye la imagen, monta `deploy/data/` y publica el servidor solo en `127.0.0.1`. El estado persistente es únicamente `deploy/data/cauce.db` y `server/.env`; el resto se reconstruye desde Git.
 
-```
-/opt/cauce/
-  cauce                 binario (go build -o cauce ./cmd/cauce, compilado en tu máquina con GOOS=linux GOARCH=amd64)
-  .env                  variables (chmod 600)
-  data/cauce.db         SQLite
-  schema/               copia de schema/ del repo (o embebida en el binario, ver server/README.md)
-  whisper/              whisper.cpp compilado + modelo ggml-small.bin (o medium si el CPU aguanta)
-```
+El túnel no arranca por defecto. Cuando esté configurado, se habilita con `make tunnel` y su hostname público apunta a `http://cauce:8080` dentro de Compose.
 
-Unidad `systemd` (`/etc/systemd/system/cauce.service`):
+## Mudanza a otra máquina
 
-```ini
-[Unit]
-Description=cauce server
-After=network-online.target
+1. En el PC nuevo: `git clone ...` y `make up`.
+2. En el PC viejo: `make down` y `make backup`.
+3. Copia el archivo indicado con `scp`.
+4. En el PC nuevo: `make restore FILE=cauce-backup-...tar.gz`.
+5. Arranca el túnel solo en el PC nuevo con `make tunnel`.
 
-[Service]
-User=cauce
-WorkingDirectory=/opt/cauce
-EnvironmentFile=/opt/cauce/.env
-ExecStart=/opt/cauce/cauce
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Deploy: `scp` del binario nuevo + `systemctl restart cauce`. Cuando canse, un script de 5 líneas.
+No se pierde nada: la outbox del teléfono reintenta cuando el servidor vuelve a estar disponible y el push es idempotente por `event id`.
 
 ## Cloudflare Tunnel
+
+El túnel corre como el servicio `cloudflared` de Compose (perfil `tunnel`), no como servicio del host.
+
+1. Creá el túnel y el hostname una sola vez:
 
 ```bash
 cloudflared tunnel login
@@ -55,18 +41,17 @@ cloudflared tunnel create cauce
 cloudflared tunnel route dns cauce api.<tu-dominio>
 ```
 
-`~/.cloudflared/config.yml`:
+2. Configurá el ingress del túnel en el dashboard de Cloudflare hacia `http://cauce:8080` (el nombre del servicio en la red de Compose), no a `localhost:8080`.
 
-```yaml
-tunnel: <id>
-credentials-file: /home/cauce/.cloudflared/<id>.json
-ingress:
-  - hostname: api.<tu-dominio>
-    service: http://localhost:8080
-  - service: http_status:404
+3. Copiá el token del túnel a `server/.env`:
+
+```
+TUNNEL_TOKEN=...
 ```
 
-`cloudflared service install` lo deja como servicio. No se abre ningún puerto en el router; la IP de casa no importa.
+4. Arrancalo con `make tunnel` (equivale a exportar `server/.env` y correr `docker compose --profile tunnel up -d cloudflared`).
+
+No se abre ningún puerto en el router; la IP de casa no importa.
 
 ## Cloudflare Access
 
@@ -95,7 +80,7 @@ El endpoint es `https://<account_id>.r2.cloudflarestorage.com`. El SDK de S3 fun
 ```yaml
 # /etc/litestream.yml
 dbs:
-  - path: /opt/cauce/data/cauce.db
+  - path: /ruta/a/cauce/deploy/data/cauce.db
     replicas:
       - type: s3
         bucket: cauce
@@ -105,7 +90,7 @@ dbs:
         secret-access-key: ...
 ```
 
-`litestream replicate` como servicio. Restaurar: `litestream restore -o cauce.db s3://cauce/litestream/cauce.db`. Point-in-time recovery sin cron.
+El `path` es el archivo que Compose monta desde `deploy/data/`: usá la ruta absoluta a ese directorio en el host. Litestream todavía corre en el host, fuera de Compose (ver D13). Ejecutá `litestream replicate`. Restaurar: `litestream restore -o cauce.db s3://cauce/litestream/cauce.db`. Point-in-time recovery sin cron.
 
 ## whisper.cpp
 

@@ -1,0 +1,74 @@
+{
+  "projection": "alarmas.alarmas_activas",
+  "params": {
+    "now": "2026-11-10T15:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-23T14:00:00Z",
+      "payload": {
+        "alarma_id": "m1",
+        "titulo": "Cierre del mes (día 31)",
+        "tipo": "otro",
+        "hora": "09:00",
+        "repeticion": { "freq": "MONTHLY", "bymonthday": 31 }
+      }
+    },
+    {
+      "id": "e2",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-23T14:00:00Z",
+      "payload": {
+        "alarma_id": "m2",
+        "titulo": "Último día del mes",
+        "tipo": "otro",
+        "hora": "20:00",
+        "repeticion": { "freq": "MONTHLY", "bymonthday": -1 }
+      }
+    },
+    {
+      "id": "e3",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-23T14:00:00Z",
+      "payload": {
+        "alarma_id": "m3",
+        "titulo": "Pago quincena",
+        "tipo": "otro",
+        "hora": "09:00",
+        "repeticion": { "freq": "MONTHLY", "bymonthday": 15 }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "m3",
+      "titulo": "Pago quincena",
+      "tipo": "otro",
+      "hora": "09:00",
+      "repeticion": { "freq": "MONTHLY", "bymonthday": 15 },
+      "proximo_disparo": "2026-11-15T13:00:00Z"
+    },
+    {
+      "alarma_id": "m2",
+      "titulo": "Último día del mes",
+      "tipo": "otro",
+      "hora": "20:00",
+      "repeticion": { "freq": "MONTHLY", "bymonthday": -1 },
+      "proximo_disparo": "2026-12-01T00:00:00Z"
+    },
+    {
+      "alarma_id": "m1",
+      "titulo": "Cierre del mes (día 31)",
+      "tipo": "otro",
+      "hora": "09:00",
+      "repeticion": { "freq": "MONTHLY", "bymonthday": 31 },
+      "proximo_disparo": "2026-12-31T13:00:00Z"
+    }
+  ]
+}

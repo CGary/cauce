@@ -1,0 +1,66 @@
+{
+  "projection": "alarmas.alarmas_activas",
+  "params": {
+    "now": "2026-11-10T15:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-23T14:00:00Z",
+      "payload": {
+        "alarma_id": "o1",
+        "titulo": "Reunión mensual (primer lunes)",
+        "tipo": "reunion",
+        "hora": "09:00",
+        "repeticion": { "freq": "MONTHLY", "byday": ["1MO"] }
+      }
+    },
+    {
+      "id": "e2",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-23T14:00:00Z",
+      "payload": {
+        "alarma_id": "o2",
+        "titulo": "Bimestral último viernes",
+        "tipo": "otro",
+        "hora": "18:00",
+        "repeticion": { "freq": "MONTHLY", "interval": 2, "byday": ["-1FR"] }
+      }
+    },
+    {
+      "id": "e3",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-07-10T12:00:00Z",
+      "payload": {
+        "alarma_id": "o3",
+        "titulo": "Control trimestral terminado",
+        "tipo": "otro",
+        "hora": "07:00",
+        "repeticion": { "freq": "MONTHLY", "byday": ["1MO"], "count": 3 }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "o1",
+      "titulo": "Reunión mensual (primer lunes)",
+      "tipo": "reunion",
+      "hora": "09:00",
+      "repeticion": { "freq": "MONTHLY", "byday": ["1MO"] },
+      "proximo_disparo": "2026-12-07T13:00:00Z"
+    },
+    {
+      "alarma_id": "o2",
+      "titulo": "Bimestral último viernes",
+      "tipo": "otro",
+      "hora": "18:00",
+      "repeticion": { "freq": "MONTHLY", "interval": 2, "byday": ["-1FR"] },
+      "proximo_disparo": "2026-12-25T22:00:00Z"
+    }
+  ]
+}

@@ -4,7 +4,7 @@
 |--------------|-------|
 | id           | `alarmas` |
 | estado       | `activo` |
-| versión spec | `2` |
+| versión spec | `3` |
 | superficies  | `android`, `web` |
 
 ## 1. Problema
@@ -13,7 +13,8 @@ Las alarmas del reloj del teléfono no saben *para qué* suenan: no registran si
 
 ## 2. Proceso de negocio
 
-1. Una alarma tiene título, hora, tipo (`remedio` | `reunion` | `otro`) y repetición: `null` (una sola vez) o un subconjunto de RRULE de RFC 5545: `DAILY`, `WEEKLY` (con días) u `HOURLY`, con `interval`, y límite por `count` o por `until` (excluyentes entre sí). Uso típico: "cada 8 h por 5 días" se escribe `HOURLY` `interval 8` `count 15`.
+1. Una alarma tiene título, hora, tipo (`remedio` | `reunion` | `otro`) y repetición: `null` (una sola vez) o un subconjunto de RRULE de RFC 5545: `DAILY`, `WEEKLY` (con días), `MONTHLY` u `HOURLY`, con `interval`, y límite por `count` o por `until` (excluyentes entre sí). Uso típico: "cada 8 h por 5 días" se escribe `HOURLY` `interval 8` `count 15`.
+   - `MONTHLY` admite exactamente una de dos formas: un día del mes (`bymonthday`: `1..31`, o `-1` = último día) o un día de la semana con ordinal (`byday` con un solo valor `1MO`..`5SU` o `-1MO`..`-1SU`, p. ej. "primer lunes" = `1MO`, "último viernes" = `-1FR`). Si el día no existe en un mes (`bymonthday 31` en abril, `5MO` en un mes con cuatro lunes), ese mes no dispara: se salta, como en RFC 5545 y Google Calendar.
 2. Las alarmas de tipo `remedio` tienen un destinatario (texto libre, p. ej. el nombre de la persona a cargo) y el nombre del remedio.
 3. Al sonar, la alarma muestra pantalla completa aunque el teléfono esté bloqueado, con dos acciones: **Hecho** y **Posponer 10 min**. Suena y vibra hasta que se atiende o pasan 2 minutos (→ queda `ignorada`).
 4. **Hecho** en una alarma `remedio` registra una dosis (→ P2). En los demás tipos solo cierra la alarma.
@@ -27,7 +28,7 @@ Las alarmas del reloj del teléfono no saben *para qué* suenan: no registran si
 
 | Tipo | v | Productor | Campos (además de `id`, `user_id`, `ts`, `device_id`) |
 |------|---|-----------|-------------------------------------------------------|
-| `alarma_creada` | 2 | app, web | `alarma_id: uuid`, `titulo: string`, `tipo: enum`, `hora: "HH:MM"`, `repeticion: null (una vez) o RRULE { freq: DAILY\|WEEKLY\|HOURLY, interval?, byday?, count? o until? }`, `destinatario: string?`, `remedio: string?` |
+| `alarma_creada` | 2 | app, web | `alarma_id: uuid`, `titulo: string`, `tipo: enum`, `hora: "HH:MM"`, `repeticion: null (una vez) o RRULE { freq: DAILY\|WEEKLY\|MONTHLY\|HOURLY, interval?, byday? (WEEKLY: MO..SU; MONTHLY: un solo valor con ordinal, 1MO..5SU o -1MO..-1SU), bymonthday? (solo MONTHLY: 1..31 o -1; excluyente con byday), count? o until? }`, `destinatario: string?`, `remedio: string?` |
 | `alarma_modificada` | 2 | app, web | `alarma_id`, mismos campos que `alarma_creada` (estado completo, no diff) |
 | `alarma_desactivada` | 1 | app, web | `alarma_id`, `motivo: enum(usuario, fin_tratamiento, una_vez_atendida)` |
 | `alarma_disparada` | 1 | app | `alarma_id`, `programada_para: datetime` |
@@ -48,11 +49,12 @@ Convenciones comunes a las tres: todo `datetime` de entrada y salida es RFC 3339
 - `repeticion: null`: solo ese disparo.
 - `DAILY`: cada `interval` días (`1` si se omite) a `hora`.
 - `WEEKLY` (alineado con RFC 5545, `WKST=MO`): el primer disparo es la primera ocurrencia de `hora` estrictamente posterior al `ts` del `alarma_creada` que caiga en un día listado en `byday`. Sin `byday`, el primer disparo es la primera ocurrencia de `hora` posterior al `ts`, y solo cuenta su día de la semana. Con `interval`, `interval` cuenta semanas del calendario ISO (las semanas empiezan el lunes): solo disparan las semanas que distan un múltiplo de `interval` de la semana que contiene el primer disparo. Ejemplo: alarma creada el viernes 2026-10-23 10:00 local con `hora 08:00`, `byday ["FR"]`, `interval 2` → primer disparo viernes 30-10 08:00, siguiente viernes 13-11 08:00 (caso_07).
+- `MONTHLY`: el primer disparo es la primera ocurrencia de `hora` estrictamente posterior al `ts` del `alarma_creada` que cumpla la regla (`bymonthday` o `byday` con ordinal). Luego, cada `interval` meses (`1` si se omite) el día que cumple la regla en ese mes; `-1` cuenta desde el final del mes (`bymonthday -1` = último día; `byday -1FR` = último viernes). Un mes sin ese día se salta y no consume `count`. Ejemplo: creada el 2026-10-23 con `hora 09:00`, `bymonthday 31` → 31-10, 31-12, 31-01 (noviembre no tiene 31). Ejemplo: `byday ["1MO"]` creada el viernes 2026-10-23 → lunes 02-11, lunes 07-12.
 - `HOURLY`: cada `interval` horas desde el primer disparo.
 - `count`: exactamente esa cantidad de disparos, primero incluido. `until`: no hay disparo con fecha local posterior a `until` (es inclusive). `count` y `until` son excluyentes, como en RFC 5545. Sin `count` ni `until`, la repetición no termina.
 - Ejemplo: "cada 8 h por 5 días" se escribe `{"freq": "HOURLY", "interval": 8, "count": 15}`. Con `hora 08:00` y creada el 20 a las 06:30: 15 disparos, del 20 08:00 al 25 00:00.
 
-Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fuera de alcance.
+Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en `byday` de `MONTHLY`, `bymonthday` fuera de `MONTHLY`, …) queda fuera de alcance.
 
 ### P1. `alarmas_activas`
 - **Entrada:** `alarma_creada`, `alarma_modificada`, `alarma_desactivada`
@@ -75,7 +77,7 @@ Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fu
 ## 5. Superficies
 
 ### Android
-- **Pantallas:** lista de alarmas activas (P1) con toggle; editor de alarma; historial de dosis por destinatario (P3).
+- **Pantallas:** lista de alarmas activas (P1) con toggle; editor de alarma (la repetición "Mensual" ofrece dos modos: "día N del mes" con opción "último día", y "N-ésimo día de la semana" con opción "último", 2.1); historial de dosis por destinatario (P3).
 - **Al recibir eventos por sync:** tras un pull que traiga `alarma_creada`, `alarma_modificada` o `alarma_desactivada` (incluidos los emitidos por la web con `device_id: "web"`), la app recomputa P1 y reprograma las alarmas del sistema (2.7).
 - **Notificaciones / servicios:** `AlarmManager.setExactAndAllowWhileIdle` por alarma; `BroadcastReceiver` para el disparo; notificación con `fullScreenIntent` y acciones Hecho/Posponer; receiver de `BOOT_COMPLETED` que reprograma desde P1.
 - **Permisos:**
@@ -123,12 +125,13 @@ Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fu
 - Importación `.ics`: subconjunto RFC 5545 pensado para que sirva una exportación de Google Calendar; un VEVENT por alarma:
   - `SUMMARY` → `titulo`.
   - hora local de `DTSTART` → `hora`; la fecha de `DTSTART` se ignora (→ §8).
-  - `RRULE` → `repeticion`; `UNTIL` en UTC se convierte a fecha local con la zona de la sesión web (la misma que viaja como `params.tz`). Una regla fuera del subconjunto (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, ordinales en `BYDAY`, `COUNT` junto con `UNTIL`, …) se rechaza con un error por evento, sin frenar el resto del archivo.
+  - `RRULE` → `repeticion`; `UNTIL` en UTC se convierte a fecha local con la zona de la sesión web (la misma que viaja como `params.tz`). `FREQ=MONTHLY;BYMONTHDAY=n` → `bymonthday n`; `FREQ=MONTHLY;BYDAY=1MO` → `byday ["1MO"]`. La forma equivalente que escriben Apple Calendar y Outlook, `FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1` (un solo día sin ordinal, un solo `BYSETPOS` en `1..5` o `-1`), se traduce a `byday ["1MO"]`. Una regla fuera del subconjunto (`YEARLY`, `BYHOUR`, `EXDATE`, varios días o varios `BYMONTHDAY` en `MONTHLY`, cualquier otro uso de `BYSETPOS`, `COUNT` junto con `UNTIL`, …) se rechaza con un error por evento, sin frenar el resto del archivo.
   - `CATEGORIES` → `tipo` (`remedio` | `reunion` | `otro`; si falta, `otro`).
   - `X-CAUCE-DESTINATARIO` y `X-CAUCE-REMEDIO` → `destinatario` y `remedio`.
 - La exportación produce los dos formatos. En el `.ics` los campos de dominio (`destinatario`, `remedio`) se espejan además en `DESCRIPTION`, porque Google puede descartar las propiedades `X-`. No se usa `VTODO` (Google lo ignora).
   - Interoperabilidad `HOURLY`: Google Calendar no soporta `FREQ=HOURLY`. Si `interval` divide a 24 (24 es divisible por `n`), se emiten `24/n` VEVENTs, cada uno con `RRULE:FREQ=DAILY` y el mismo `COUNT`/`UNTIL` traducido (`COUNT` repartido entre los VEVENTs), con `DTSTART` a `hora`, `hora+n`, … Ejemplo: cada 8 h desde 08:00 → 3 VEVENTs diarios a 08:00, 16:00 y 00:00. Si 24 no es divisible por `n`, se emite un VEVENT por disparo, sin `RRULE`. Si la alarma no tiene `count` ni `until`, se exportan solo los primeros 30 días.
   - Interoperabilidad `WEEKLY`: el `DTSTART` debe ser el primer disparo, que por la regla de §4 con `byday` cae en un día listado en `byday`.
+  - Interoperabilidad `MONTHLY`: se exporta tal cual (`FREQ=MONTHLY;BYMONTHDAY=n` o `FREQ=MONTHLY;BYDAY=1MO`, siempre en la forma con ordinal, nunca con `BYSETPOS`), con `DTSTART` en el primer disparo. Google y Apple lo soportan nativamente; no hace falta desdoblar como con `HOURLY`. Un mes sin ese día lo saltan igual que cauce.
   - `VALARM` se incluye (`ACTION=DISPLAY`, `TRIGGER:PT0M`), pero la exportación es para personas y otros calendarios: Google y Apple pueden ignorar `VALARM` y las propiedades `X-`. La fuente de verdad del timbre es siempre la app, nunca la notificación del calendario.
   - En importación, un `RRULE` `HOURLY` se acepta (está en el subconjunto), aunque Google nunca lo produce.
 - El parseo ocurre en la web, antes del push. No es una proyección y no tiene fixtures.
@@ -148,20 +151,26 @@ Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fu
 | P1 | `caso_05_modificada_desde_web` | la `alarma_modificada` de la web (`device_id: "web"`, `ts` posterior) gana: gana el último `ts`, no el dispositivo (2.7, 2.9) |
 | P1 | `caso_06_until_inclusivo` | `until` es inclusive: hay disparo en la fecha `until` y ninguno después |
 | P1 | `caso_07_semanal_byday` | `WEEKLY byday` respeta los días y `interval` (2 semanas = 14 días, no 7) |
+| P1 | `caso_08_mensual_dia_del_mes` | con `now` en noviembre: `bymonthday 15` da 15-11; `bymonthday 31` salta a 31-12 (noviembre no tiene 31); `bymonthday -1` da el último día del mes (30-11); orden por `proximo_disparo` |
+| P1 | `caso_09_mensual_dia_ordinal` | `byday ["1MO"]` da el primer lunes del mes siguiente; `byday ["-1FR"]` con `interval 2` salta un mes entero; una con `count 3` agotada no aparece |
 | P2 | `caso_01_tratamiento_completo` | `count 15` → 15 esperadas, 15 dadas |
 | P2 | `caso_02_con_ignoradas` | 15 esperadas, 13 dadas, 2 ignoradas |
 | P2 | `caso_03_dosis_duplicada_por_sync` | dos `dosis_dada` con mismo `programada_para` cuentan 1 |
 | P2 | `caso_04_pospuesta_tres_veces` | tres `pospuesta` y luego `ignorada` sobre el mismo disparo → 1 esperada, 0 dadas, 1 ignorada; las posposiciones no cuentan |
+| P2 | `caso_05_mensual_esperadas` | remedio `bymonthday 31`, `count 3`, `now` en febrero: 3 esperadas (oct, dic, ene; noviembre saltado no cuenta), 2 dadas, 1 ignorada |
 | P3 | `caso_01_filtro_destinatario` | solo dosis del destinatario pedido, orden desc |
 
 ## 8. Fuera de alcance y decisiones
 
 - No hay alarmas por ubicación ("al llegar a casa"). Es otro feature si algún día hace falta.
 - No se sincroniza con Google Calendar: solo importación/exportación de archivos `.ics` (§5).
+- No hay `YEARLY`: "una vez al año" se escribe `MONTHLY` `interval 12` (RFC 5545 lo permite y Google lo entiende). `YEARLY` real (con `bymonth`) entra solo si algún día hace falta.
+- `MONTHLY` no admite listas: un solo `bymonthday` o un solo `byday` con ordinal. Dos días al mes son dos alarmas.
 - El destinatario es texto libre y no un catálogo de personas: evita una dependencia con un feature `familia` que hoy no existe.
 - `alarma_modificada` lleva el estado completo (no un diff) para que P1 no tenga que reconstruir campo por campo; cuesta bytes, ahorra bugs.
 - No hay evento `alarma_borrada`: desactivar es suficiente (2.8).
 - (agente) v1 de `alarma_creada`/`alarma_modificada` nunca se produjo (no hubo implementación); las proyecciones leen solo v2.
+- `MONTHLY` (spec v3) se agregó editando `alarma_creada.v2` y `alarma_modificada.v2` en el lugar, no como v3: decisión del dueño, porque v2 tampoco llegó a implementarse y no existe ningún evento producido que pueda romperse. Es la única excepción a "nunca editar un schema publicado"; a partir de la primera implementación la regla vuelve a aplicar.
 - (agente) `WEEKLY` sin `byday` repite el mismo día de la semana del primer disparo (el comportamiento por defecto de RFC 5545 cuando no hay `BYDAY`); con `interval` el ciclo ancla en la semana — del calendario ISO, que empieza el lunes (`WKST=MO`) — que contiene ese primer disparo (§4).
 - (agente) Al importar `.ics`, la fecha de `DTSTART` se ignora: solo su hora local define `hora`. El calendario de cauce ancla en "primera ocurrencia de `hora` posterior a la creación", no en la fecha original del evento.
 - (agente) No hay borrado duro en la web: **Eliminar** emite `alarma_desactivada` con `motivo: usuario` para que el historial de dosis sobreviva (2.8); la UI lo explica.
@@ -173,3 +182,4 @@ Todo resto de RRULE (`BYHOUR`, `BYMONTHDAY`, `BYSETPOS`, `EXDATE`, …) queda fu
 
 - `v1` — 2026-10-22 — creación. Fixtures iniciales escritos a mano junto con los schemas.
 - `v2` — 2026-10-22 — la web administra alarmas: alta, edición, baja y carga/exportación en bloque, con eventos por `POST /sync/push` (`device_id: "web"`) que el teléfono aplica al recibir el pull (2.7, 2.9). `repeticion` pasa a subconjunto de RRULE RFC 5545 (`null` = una vez; `count`/`until` excluyentes; `until` inclusive) y se elimina el campo `fin`; schemas nuevos `alarma_creada.v2` y `alarma_modificada.v2`. Fixtures reescritos a v2 y tres casos nuevos: modificación desde web, `until` inclusive y semanal `byday`. Aclaraciones (sin cambios de versión, v2 aún sin implementar): regla `WEEKLY` precisa y alineada con RFC 5545 (interval cuenta semanas ISO, anclada en la semana del primer disparo); reglas de interoperabilidad de exportación `.ics` (HOURLY desdoblado en VEVENTs DAILY, DTSTART de WEEKLY en el primer disparo, VALARM/X- opcionales en el receptor, import acepta HOURLY).
+- `v3` — 2026-10-23 — repetición mensual: `freq: MONTHLY` con `bymonthday` (`1..31` o `-1` = último día) o `byday` con un ordinal (`1MO`..`5SU`, `-1MO`..`-1SU`), excluyentes; un mes sin ese día se salta y no consume `count`. Editor con modo "Mensual" en app y web. Importación `.ics` acepta `MONTHLY` y traduce la forma Apple/Outlook `BYDAY=MO;BYSETPOS=1`; exportación emite `MONTHLY` tal cual. Schemas `alarma_creada.v2` y `alarma_modificada.v2` editados en el lugar (sin eventos producidos, decisión del dueño, §8). Tres fixtures nuevos (P1 ×2, P2 ×1). `YEARLY` fuera de alcance.

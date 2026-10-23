@@ -1,0 +1,70 @@
+{
+  "projection": "alarmas.adherencia_tratamiento",
+  "params": {
+    "now": "2027-02-10T15:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-23T14:00:00Z",
+      "payload": {
+        "alarma_id": "t5",
+        "titulo": "Vitamina D Ana",
+        "tipo": "remedio",
+        "hora": "09:00",
+        "repeticion": { "freq": "MONTHLY", "bymonthday": 31, "count": 3 },
+        "destinatario": "Ana",
+        "remedio": "Vitamina D"
+      }
+    },
+    {
+      "id": "d1",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-10-31T13:03:00Z",
+      "payload": {
+        "alarma_id": "t5",
+        "destinatario": "Ana",
+        "remedio": "Vitamina D",
+        "programada_para": "2026-10-31T13:00:00Z"
+      }
+    },
+    {
+      "id": "d2",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-12-31T13:04:00Z",
+      "payload": {
+        "alarma_id": "t5",
+        "destinatario": "Ana",
+        "remedio": "Vitamina D",
+        "programada_para": "2026-12-31T13:00:00Z"
+      }
+    },
+    {
+      "id": "a1",
+      "type": "alarma_atendida",
+      "v": 1,
+      "ts": "2027-01-31T13:02:00Z",
+      "payload": {
+        "alarma_id": "t5",
+        "programada_para": "2027-01-31T13:00:00Z",
+        "accion": "ignorada"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "t5",
+      "destinatario": "Ana",
+      "remedio": "Vitamina D",
+      "dosis_esperadas": 3,
+      "dosis_dadas": 2,
+      "ignoradas": 1,
+      "ultima_dosis": "2026-12-31T13:04:00Z"
+    }
+  ]
+}

@@ -11,7 +11,7 @@ class ConformanceTest {
 
     @Test
     fun `every fixture matches its projection`() {
-        assumeTrue("No fixtures found; check -Dcauce.schemaDir", fixtures.isNotEmpty())
+        assertTrue(fixtures.isNotEmpty(), "No fixtures found; check -Dcauce.schemaDir")
         assumeTrue(
             "No feature projections are registered yet. The conformance runner is wired; it will " +
                 "enforce every fixture as soon as the first feature module exposes projections.",

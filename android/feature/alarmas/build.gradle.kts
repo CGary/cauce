@@ -26,7 +26,8 @@ android {
         compose = true
     }
 
-    // Pure projections live here: no Android imports, so :feature:alarmas:test runs on the JVM.
+    // src/domain/kotlin holds the pure projection code: no Android imports, so
+    // :feature:alarmas:test runs on the JVM. The .gitkeep keeps the empty directory tracked.
     sourceSets.getByName("main").java.srcDir("src/domain/kotlin")
 }
 

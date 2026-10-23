@@ -8,7 +8,7 @@ test-server:
 	cd server && go test ./...
 
 test-android:
-	cd android && ./gradlew --quiet :core:events:test :feature:alarmas:test
+	cd android && ./gradlew --quiet :core:events:test :core:sync:test :feature:alarmas:test
 
 test-web:
 	cd web && npx tsc --noEmit && npx eslint . && npx vitest run
@@ -22,4 +22,9 @@ apk:
 	cd android && ./gradlew :app:assembleDebug && find . -name '*.apk' -path '*debug*'
 
 server-run:
+	@if [ -f server/.env ]; then set -a; . ./server/.env; set +a; fi; \
+	if [ -z "$$CAUCE_USER_ID" ]; then \
+		echo "CAUCE_USER_ID is not set. Create server/.env from server/.env.example or export it." >&2; \
+		exit 1; \
+	fi; \
 	cd server && go run ./cmd/cauce

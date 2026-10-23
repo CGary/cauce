@@ -16,13 +16,10 @@ jobs:
       - run: pip install jsonschema
       - run: python3 scripts/lint_contract.py
 
-  # Los jobs de server y android se activan en BOOTSTRAP.md fases 2 y 3.
-  # Hasta entonces fallan de forma tolerada para que el lint del contrato
-  # sea lo único obligatorio.
+  # Gates de BOOTSTRAP.md fases 2 y 3: server y android deben pasar.
   server:
     name: go test
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -33,14 +30,14 @@ jobs:
   android:
     name: gradle unit tests
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-      - run: cd android && ./gradlew --quiet :core:events:test :feature:alarmas:test
+      - uses: android-actions/setup-android@v3
+      - run: cd android && ./gradlew --quiet :core:events:test :core:sync:test :feature:alarmas:test
 
   web:
     name: web (tsc, eslint, vitest, build)

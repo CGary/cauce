@@ -12,6 +12,9 @@ import (
 func TestEmbeddedSchemaInSync(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "schema")
 	if _, err := os.Stat(filepath.Join(root, "envelope.v1.json")); err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("repository schema tree not available in CI: %v", err)
+		}
 		t.Skipf("repository schema tree not available: %v", err)
 	}
 

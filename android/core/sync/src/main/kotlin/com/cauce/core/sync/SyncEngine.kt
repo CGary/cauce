@@ -9,7 +9,7 @@ import com.cauce.core.events.EventStore
 class SyncEngine(
     private val store: EventStore,
     private val api: SyncApi,
-    private val cursor: SyncCursor,
+    private val cursor: SyncCursorStore,
 ) {
     /** Returns the event types brought by this pull, so the app can re-apply device effects. */
     suspend fun sync(): Set<String> {
@@ -37,17 +37,13 @@ class SyncEngine(
                 page.events.mapTo(pulledTypes) { it.type }
             }
 
-            if (page.nextSince <= since) break
+            if (page.events.isEmpty() || page.nextSince <= since) break
             since = page.nextSince
+            // A crash between the append above and this write is harmless: the next pull replays
+            // the page and appendIfAbsent dedupes by id.
             cursor.write(since)
-
-            if (page.events.size < PAGE_SIZE) break
         }
 
         return pulledTypes
-    }
-
-    private companion object {
-        const val PAGE_SIZE = 500
     }
 }

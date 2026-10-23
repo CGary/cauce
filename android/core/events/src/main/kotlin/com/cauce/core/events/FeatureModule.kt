@@ -12,10 +12,16 @@ import com.cauce.core.events.projection.Projection
 interface FeatureModule {
     val id: String
 
+    /** Event types this feature owns or consumes; a pull touching any of them re-applies effects. */
+    val eventTypes: Set<String>
+
     val projections: List<Projection<*>>
 
     fun NavGraphBuilder.navGraph(nav: NavController)
 
-    /** Called on app start and after every pull that brought events, for device-side effects. */
+    /** Called once on app start, for device-side effects (alarms, widgets, services). */
     fun onAppStart(ctx: Context) {}
+
+    /** Called after a pull that brought any of [eventTypes], to re-apply device-side effects. */
+    fun onEventsPulled(types: Set<String>) {}
 }

@@ -91,6 +91,7 @@ class ProjectionRegistryTest {
     fun `aggregate collects every module`() {
         val module = object : FeatureModule {
             override val id = "fake"
+            override val eventTypes = setOf("fake_event")
             override val projections: List<Projection<*>> = listOf(projection())
             override fun androidx.navigation.NavGraphBuilder.navGraph(nav: androidx.navigation.NavController) = Unit
         }

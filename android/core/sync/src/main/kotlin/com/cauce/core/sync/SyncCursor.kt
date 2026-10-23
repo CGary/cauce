@@ -12,15 +12,22 @@ import kotlinx.coroutines.flow.map
 
 private val Context.syncDataStore: DataStore<Preferences> by preferencesDataStore(name = "sync")
 
+/** Reads and writes the `server_seq` cursor; the seam SyncEngine tests replace. */
+interface SyncCursorStore {
+    suspend fun read(): Long
+
+    suspend fun write(value: Long)
+}
+
 /** The `server_seq` cursor: the last server position this device has applied. */
-class SyncCursor(private val context: Context) {
+class SyncCursor(private val context: Context) : SyncCursorStore {
     private val key = longPreferencesKey("server_seq")
 
     val flow: Flow<Long> = context.syncDataStore.data.map { it[key] ?: 0L }
 
-    suspend fun read(): Long = context.syncDataStore.data.first()[key] ?: 0L
+    override suspend fun read(): Long = context.syncDataStore.data.first()[key] ?: 0L
 
-    suspend fun write(value: Long) {
+    override suspend fun write(value: Long) {
         context.syncDataStore.edit { it[key] = value }
     }
 }

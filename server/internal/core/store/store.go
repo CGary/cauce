@@ -106,15 +106,9 @@ func (s *Store) migrate(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		for _, stmt := range strings.Split(string(body), ";") {
-			stmt = strings.TrimSpace(stmt)
-			if stmt == "" {
-				continue
-			}
-			if _, err := tx.ExecContext(ctx, stmt); err != nil {
-				tx.Rollback()
-				return fmt.Errorf("apply migration %s: %w", name, err)
-			}
+		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("apply migration %s: %w", name, err)
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`,

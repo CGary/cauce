@@ -16,9 +16,12 @@ class CauceApp : Application() {
         SyncRuntime.configure(
             engine = container.syncEngine,
             uploader = container.blobUploader,
-            onPulled = {
-                // Device-side effects are re-applied after a pull (AGENTS.md hard rule).
-                FeatureRegistry.features.forEach { feature -> feature.onAppStart(this) }
+            onPulled = { types ->
+                // Device-side effects are re-applied only for features touched by the pull
+                // (AGENTS.md hard rule).
+                FeatureRegistry.features.forEach { feature ->
+                    if (feature.eventTypes.any { it in types }) feature.onEventsPulled(types)
+                }
             },
         )
 

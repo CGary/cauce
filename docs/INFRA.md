@@ -15,17 +15,17 @@ Objetivo: costo mensual ≈ 0 más el dominio. Todo lo de abajo es reemplazable 
 
 ## PC viejo
 
-Linux mínimo (Debian/Ubuntu Server) con Docker Compose. `make up` construye la imagen, monta `deploy/data/` y publica el servidor solo en `127.0.0.1`. El estado persistente es únicamente `deploy/data/cauce.db` y `server/.env`; el resto se reconstruye desde Git.
+Linux mínimo (Debian/Ubuntu Server) con Docker Compose y `just`. `just up` construye la imagen, monta `deploy/data/` y publica el servidor solo en `127.0.0.1`. El estado persistente es únicamente `deploy/data/cauce.db` y `server/.env`; el resto se reconstruye desde Git.
 
-El túnel no arranca por defecto. Cuando esté configurado, se habilita con `make tunnel` y su hostname público apunta a `http://cauce:8080` dentro de Compose.
+El túnel no arranca por defecto. Cuando esté configurado, se habilita con `just tunnel` y su hostname público apunta a `http://cauce:8080` dentro de Compose.
 
 ## Mudanza a otra máquina
 
-1. En el PC nuevo: `git clone ...` y `make up`.
-2. En el PC viejo: `make down` y `make backup`.
+1. En el PC nuevo: `git clone ...` y `just up`.
+2. En el PC viejo: `just down` y `just backup`.
 3. Copia el archivo indicado con `scp`.
-4. En el PC nuevo: `make restore FILE=cauce-backup-...tar.gz`.
-5. Arranca el túnel solo en el PC nuevo con `make tunnel`.
+4. En el PC nuevo: `just restore cauce-backup-...tar.gz`.
+5. Arranca el túnel solo en el PC nuevo con `just tunnel`.
 
 No se pierde nada: la outbox del teléfono reintenta cuando el servidor vuelve a estar disponible y el push es idempotente por `event id`.
 
@@ -49,7 +49,7 @@ cloudflared tunnel route dns cauce api.<tu-dominio>
 TUNNEL_TOKEN=...
 ```
 
-4. Arrancalo con `make tunnel` (equivale a exportar `server/.env` y correr `docker compose --profile tunnel up -d cloudflared`).
+4. Arrancalo con `just tunnel` (equivale a exportar `server/.env` y correr `docker compose --profile tunnel up -d cloudflared`).
 
 No se abre ningún puerto en el router; la IP de casa no importa.
 

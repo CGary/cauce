@@ -50,6 +50,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
         working-directory: web
-      - run: make test-web
+      - uses: extractions/setup-just@v2
+      - run: just test-web
       - run: npm run build
         working-directory: web

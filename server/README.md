@@ -55,13 +55,13 @@ go build -o cauce ./cmd/cauce
 ./cauce
 ```
 
-Or `make server-run` from the repository root.
+Or `just server-run` from the repository root.
 
 ## Docker
 
-From the repository root, `make up` creates `server/.env` when needed, builds
+From the repository root, `just up` creates `server/.env` when needed, builds
 the pinned image and starts the server with its database in `deploy/data/`.
-Use `make backup` and `make restore FILE=...` to move the state to another
+Use `just backup` and `just restore <archivo>` to move the state to another
 machine. The optional Cloudflare Tunnel is started with the `tunnel` profile.
 
 ## Schema embedding

@@ -18,7 +18,7 @@ cp .env.example .env   # opcional en desarrollo
 
 | Comando            | Qué hace                                                                                                            |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`      | Servidor de desarrollo. `/api` se redirige por proxy a `http://localhost:8080`, el servidor Go (`make server-run`). |
+| `npm run dev`      | Servidor de desarrollo. `/api` se redirige por proxy a `http://localhost:8080`, el servidor Go (`just server-run`). |
 | `npm run dev:mock` | La UI contra MSW, sin servidor Go. Los datos son los valores `expected` de `schema/features/<id>/fixtures`.         |
 
 ## Variables
@@ -32,7 +32,7 @@ cp .env.example .env   # opcional en desarrollo
 ## Testear
 
 ```sh
-make test-web          # desde la raíz: tsc --noEmit && eslint . && vitest run
+just test-web          # desde la raíz: tsc --noEmit && eslint . && vitest run
 npm run format:check   # Prettier
 npm run e2e:install    # una vez: chromium dentro de node_modules (no en el sistema)
 npm run e2e            # test de humo; guarda e2e/screenshots/alarmas.png
@@ -43,7 +43,7 @@ Los tests de componentes y el de humo corren contra MSW, así que no necesitan e
 ## Compilar
 
 ```sh
-make build-web   # o: npm run build → tsc --noEmit && vite build
+just build-web   # o: npm run build → tsc --noEmit && vite build
 ```
 
 La salida queda en `dist/`. MSW y su service worker no entran al build.

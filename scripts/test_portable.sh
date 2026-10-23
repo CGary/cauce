@@ -28,7 +28,7 @@ EOF
 chmod 600 server/.env
 
 export COMPOSE_PROJECT_NAME="$project" CAUCE_DATA_DIR="$data_dir" CAUCE_HOST_PORT=18089
-make up
+just up
 curl -fsS http://127.0.0.1:18089/healthz >/dev/null
 
 fixture=$(python3 - <<'PY'
@@ -42,15 +42,15 @@ print(json.dumps({'events': [event]}))
 PY
 )
 curl -fsS -X POST http://127.0.0.1:18089/sync/push -H 'Content-Type: application/json' -d "$fixture" | python3 -c 'import json,sys; assert json.load(sys.stdin)["accepted"] == 1'
-make backup
+just backup
 new_backup=$(comm -13 "$backups_before" <(find . -maxdepth 1 -name 'cauce-backup-*.tar.gz' -printf '%f\n' | sort) | sed -n '1p')
 test -n "$new_backup"
 backup="./$new_backup"
 test -f "$backup"
-make down
+just down
 rm -rf "$data_dir" && mkdir -p "$data_dir"
-make up
+just up
 curl -fsS http://127.0.0.1:18089/sync/pull?since=0 | python3 -c 'import json,sys; assert len(json.load(sys.stdin)["events"]) == 0'
-make restore FILE="$backup"
+just restore "$backup"
 curl -fsS http://127.0.0.1:18089/sync/pull?since=0 | python3 -c 'import json,sys; assert len(json.load(sys.stdin)["events"]) == 1'
 echo 'portable e2e: PASS'

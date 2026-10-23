@@ -15,7 +15,7 @@ The spec describes the **desired state**, never a change request. Your job is to
 3. Write or update the fixtures listed in SPEC section 7 **before** writing any Kotlin or Go. Fixtures are the acceptance criteria.
 4. Run `python3 scripts/lint_contract.py`. It must pass before you touch code.
 5. Implement. Touch only the paths owned by this feature (see Ownership).
-6. Run the conformance tests on both sides (`make test`). Both must be green.
+6. Run the conformance tests on both sides (`just test`). Both must be green.
 7. Bump `versión spec` and add a changelog line in SPEC.md if you changed behavior that the owner did not already record.
 8. Summarize what converged, what you could not do, and any spec ambiguity you resolved (and how).
 

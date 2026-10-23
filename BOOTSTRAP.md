@@ -27,9 +27,9 @@ Run `python3 scripts/lint_contract.py`. It must pass on the untouched repo.
 
 ## Phase 1 — Build glue
 
-`Makefile` and `.github/workflows/ci.yml` already exist with targets `lint`, `test-server`, `test-android`, `test`, `apk`, `server-run`. The server and android CI jobs carry `continue-on-error: true` until phases 2 and 3 land; remove the flag at the end of each phase. Adjust paths in both files only if your module layout differs from this document.
+`justfile` and `.github/workflows/ci.yml` already exist with targets `lint`, `test-server`, `test-android`, `test`, `apk`, `server-run`. The server and android CI jobs carry `continue-on-error: true` until phases 2 and 3 land; remove the flag at the end of each phase. Adjust paths in both files only if your module layout differs from this document.
 
-**Gate 1:** `make lint` passes. Commit.
+**Gate 1:** `just lint` passes. Commit.
 
 ---
 
@@ -65,7 +65,7 @@ Requirements:
 - Config from env only: `CAUCE_ADDR`, `CAUCE_DB_PATH`, `CAUCE_USER_ID`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`. Put them in `.env.example` with comments.
 - Dockerfile is **not** needed. Document `go build -o cauce ./cmd/cauce` and the systemd unit in `docs/INFRA.md` (already drafted; adjust if your binary name/paths differ).
 
-**Gate 2:** `make test-server` green including conformance; `make server-run` starts; a `curl` push + pull round-trip documented in `server/README.md` works. Remove `continue-on-error` from the server CI job. Commit.
+**Gate 2:** `just test-server` green including conformance; `just server-run` starts; a `curl` push + pull round-trip documented in `server/README.md` works. Remove `continue-on-error` from the server CI job. Commit.
 
 ---
 
@@ -112,7 +112,7 @@ Event append validates the payload against the embedded JSON Schema in debug bui
 
 **alarmas**: implement everything in `schema/features/alarmas/SPEC.md` section 5 (Android). Exact alarms via `setExactAndAllowWhileIdle`; request `SCHEDULE_EXACT_ALARM` with the settings-deeplink fallback on Android 12+; `fullScreenIntent` notification with "Hecho" and "Posponer 10 min" actions; `BOOT_COMPLETED` receiver reschedules from `alarmas_activas`.
 
-**Gate 3:** `make test-android` green (fixtures pass in Kotlin too), `make apk` produces an APK, and the owner can install it and create/fire an alarm. Remove `continue-on-error` from the android CI job. Commit.
+**Gate 3:** `just test-android` green (fixtures pass in Kotlin too), `just apk` produces an APK, and the owner can install it and create/fire an alarm. Remove `continue-on-error` from the android CI job. Commit.
 
 ---
 
@@ -144,14 +144,14 @@ Rules: `features/<id>/` imports only from `core/` (tests may also use `src/test`
 
 `VITE_API_BASE` comes from `.env` (`.env.example` is committed, `.env` is ignored). In dev, Vite proxies `/api` to `http://localhost:8080`. `npm run dev:mock` runs the UI against MSW, without the Go server.
 
-**Gate 4:** `make test-web` green (tsc, eslint, vitest), `npm run build` succeeds, and `npm run e2e` passes and writes `web/e2e/screenshots/alarmas.png`. Report the initial chunk size from `vite build`. Commit `web: react dashboard scaffold`.
+**Gate 4:** `just test-web` green (tsc, eslint, vitest), `npm run build` succeeds, and `npm run e2e` passes and writes `web/e2e/screenshots/alarmas.png`. Report the initial chunk size from `vite build`. Commit `web: react dashboard scaffold`.
 
 ---
 
 ## Phase 5 — Hand-off
 
 - Write `docs/STATUS.md`: what exists, how to run each part, known gaps.
-- Verify `make test` is green end to end.
+- Verify `just test` is green end to end.
 - List, for the owner, the next three specs to write (see `docs/ROADMAP.md`) and any spec ambiguities you resolved during bootstrap (they must also be in each SPEC's section 8 with the `(agente)` prefix).
 
 **Gate 5:** final commit, summary to the owner. Bootstrap is complete; all further work goes through `/feature` and `/new-feature`.

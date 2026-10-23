@@ -1,0 +1,11 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    schema: "migrations/0001_events.sql"
+    queries: "internal/core/store/queries.sql"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "internal/core/store/sqlcgen"
+        emit_empty_slices: true
+        emit_interface: false

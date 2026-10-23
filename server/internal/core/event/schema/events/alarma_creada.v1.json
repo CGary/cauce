@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/alarma_creada.v1.json",
+  "title": "alarma_creada",
+  "description": "Se definió una alarma nueva. Feature dueño: alarmas.",
+  "type": "object",
+  "required": ["alarma_id", "titulo", "tipo", "hora", "repeticion"],
+  "properties": {
+    "alarma_id": { "type": "string", "minLength": 1 },
+    "titulo": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "tipo": { "type": "string", "enum": ["remedio", "reunion", "otro"] },
+    "hora": {
+      "type": "string",
+      "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+      "description": "Hora local del primer disparo del día, HH:MM."
+    },
+    "repeticion": { "$ref": "#/$defs/repeticion" },
+    "fin": {
+      "type": "string",
+      "format": "date",
+      "description": "Último día (inclusive) en que la alarma puede sonar. Obligatorio si repeticion.tipo = cada_n_horas."
+    },
+    "destinatario": { "type": "string", "maxLength": 60, "description": "Solo tipo remedio. Texto libre." },
+    "remedio": { "type": "string", "maxLength": 120, "description": "Solo tipo remedio." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "tipo": { "const": "remedio" } } },
+      "then": { "required": ["destinatario", "remedio"] }
+    },
+    {
+      "if": { "properties": { "repeticion": { "properties": { "tipo": { "const": "cada_n_horas" } }, "required": ["tipo"] } } },
+      "then": { "required": ["fin"] }
+    }
+  ],
+  "$defs": {
+    "repeticion": {
+      "type": "object",
+      "required": ["tipo"],
+      "properties": {
+        "tipo": { "type": "string", "enum": ["una_vez", "diaria", "dias_semana", "cada_n_horas"] },
+        "dias": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 7 },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "1 = lunes … 7 = domingo. Solo dias_semana."
+        },
+        "n": { "type": "integer", "minimum": 1, "maximum": 24, "description": "Horas entre disparos. Solo cada_n_horas." }
+      },
+      "allOf": [
+        { "if": { "properties": { "tipo": { "const": "dias_semana" } } }, "then": { "required": ["dias"] } },
+        { "if": { "properties": { "tipo": { "const": "cada_n_horas" } } }, "then": { "required": ["n"] } }
+      ]
+    }
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/alarma_modificada.v2.json",
+  "title": "alarma_modificada",
+  "description": "Se reemplazó el estado completo de una alarma existente (no es un diff). Puede venir de la app o de la web. Feature dueño: alarmas.",
+  "type": "object",
+  "required": ["alarma_id", "titulo", "tipo", "hora", "repeticion"],
+  "properties": {
+    "alarma_id": { "type": "string", "minLength": 1 },
+    "titulo": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "tipo": { "type": "string", "enum": ["remedio", "reunion", "otro"] },
+    "hora": {
+      "type": "string",
+      "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+      "description": "Hora local del primer disparo del día, HH:MM."
+    },
+    "repeticion": { "$ref": "#/$defs/repeticion" },
+    "destinatario": { "type": "string", "maxLength": 60, "description": "Solo tipo remedio. Texto libre." },
+    "remedio": { "type": "string", "maxLength": 120, "description": "Solo tipo remedio." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "tipo": { "const": "remedio" } }, "required": ["tipo"] },
+      "then": { "required": ["destinatario", "remedio"] }
+    }
+  ],
+  "$defs": {
+    "repeticion": {
+      "description": "Subconjunto estricto de RRULE (RFC 5545 §3.3.10). null = una sola vez.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["freq"],
+          "properties": {
+            "freq": { "type": "string", "enum": ["DAILY", "WEEKLY", "HOURLY"] },
+            "interval": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "description": "Cada cuántas unidades (días, semanas u horas según freq). 1 si se omite."
+            },
+            "byday": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "enum": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] },
+              "description": "Días de la semana, sin ordinales. Solo WEEKLY."
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Cantidad total de disparos, primero incluido."
+            },
+            "until": {
+              "type": "string",
+              "format": "date",
+              "description": "Última fecha local (inclusive) en que puede haber disparo."
+            }
+          },
+          "allOf": [
+            { "not": { "required": ["count", "until"] } },
+            {
+              "if": { "required": ["byday"] },
+              "then": { "properties": { "freq": { "const": "WEEKLY" } }, "required": ["freq"] }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

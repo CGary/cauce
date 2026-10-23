@@ -178,6 +178,9 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) La web pide P2 con `tz` = zona IANA del navegador y **sin** `now`: el endpoint `GET /api/projections/...` usa el reloj del servidor cuando falta `now`. Así la clave de caché no cambia en cada render y la proyección sigue siendo pura (el `now` lo inyecta el servidor, no la función).
 - (agente) El filtro por destinatario de la tabla de adherencia (P2) es de presentación, en la web: P2 no recibe `destinatario` como param. En el historial (P3) el destinatario sí viaja como param de la proyección.
 - (agente) Hora inexistente por cambio de horario (DST): se interpreta con el offset previo al salto (RFC 5545), p. ej. 02:30 → 03:30; hora ambigua: la primera ocurrencia.
+- (agente) El ancla del calendario (P1/P2) es el `ts` del último `alarma_creada`; si no hay `alarma_creada` en el log, es el `ts` del último evento de estado (`alarma_creada` o `alarma_modificada`).
+- (agente) P3 filtra por `destinatario` antes de deduplicar.
+- (agente) En P3, los empates de `ts` se ordenan por `alarma_id` y luego por `programada_para`, ambos ascendentes.
 
 ## 9. Changelog
 

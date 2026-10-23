@@ -31,6 +31,10 @@ android {
     sourceSets.getByName("main").java.srcDir("src/domain/kotlin")
 }
 
+tasks.withType<Test>().configureEach {
+    systemProperty("cauce.schemaDir", rootProject.file("../schema").absolutePath)
+}
+
 dependencies {
     implementation(project(":core:events"))
     implementation(project(":core:ui"))

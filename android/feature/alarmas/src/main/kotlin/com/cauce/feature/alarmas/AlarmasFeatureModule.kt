@@ -5,10 +5,6 @@ import androidx.navigation.NavGraphBuilder
 import com.cauce.core.events.FeatureModule
 import com.cauce.core.events.projection.Projection
 
-/**
- * Skeleton only. Projections, screens and the AlarmManager integration land in the `/feature
- * alarmas` run; until then this module registers nothing and the app stays empty.
- */
 class AlarmasFeatureModule : FeatureModule {
     override val id: String = "alarmas"
 
@@ -21,7 +17,11 @@ class AlarmasFeatureModule : FeatureModule {
         "dosis_dada",
     )
 
-    override val projections: List<Projection<*>> = emptyList()
+    override val projections: List<Projection<*>> = listOf(
+        AlarmasActivas,
+        AdherenciaTratamiento,
+        HistorialDosis,
+    )
 
     override fun NavGraphBuilder.navGraph(nav: NavController) = Unit
 }

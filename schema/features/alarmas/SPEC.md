@@ -177,6 +177,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) El parseo de carga/exportación vive en la web, antes del push; no es una proyección ni tiene fixtures.
 - (agente) La web pide P2 con `tz` = zona IANA del navegador y **sin** `now`: el endpoint `GET /api/projections/...` usa el reloj del servidor cuando falta `now`. Así la clave de caché no cambia en cada render y la proyección sigue siendo pura (el `now` lo inyecta el servidor, no la función).
 - (agente) El filtro por destinatario de la tabla de adherencia (P2) es de presentación, en la web: P2 no recibe `destinatario` como param. En el historial (P3) el destinatario sí viaja como param de la proyección.
+- (agente) Hora inexistente por cambio de horario (DST): se interpreta con el offset previo al salto (RFC 5545), p. ej. 02:30 → 03:30; hora ambigua: la primera ocurrencia.
 
 ## 9. Changelog
 

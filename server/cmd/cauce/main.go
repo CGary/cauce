@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"cauce/server/internal/alarmas"
 	"cauce/server/internal/auth"
 	"cauce/server/internal/blobs"
 	"cauce/server/internal/config"
@@ -93,9 +94,9 @@ func run() error {
 	}
 	defer st.Close()
 
-	// Feature packages register their projections here. This list stays empty
-	// until /feature <id>; the conformance harness already validates fixtures.
+	// Feature packages register their projections here (/feature <id>).
 	registry := projection.NewRegistry()
+	registry.MustRegister(alarmas.Projections()...)
 
 	pusher := &syncapi.Pusher{Store: st, Validator: validator}
 	puller := &syncapi.Puller{Store: st}

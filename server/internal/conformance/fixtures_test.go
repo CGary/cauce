@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"cauce/server/internal/alarmas"
 	"cauce/server/internal/conformance"
 	"cauce/server/internal/core/event"
 	"cauce/server/internal/core/projection"
@@ -27,9 +28,9 @@ func TestContractFixtures(t *testing.T) {
 		t.Fatalf("no fixtures found under %s", root)
 	}
 
-	// No feature package is wired in phase 2; /feature <id> registers its
-	// projections here eventually.
+	// Feature packages register their projections here (/feature <id>).
 	registry := projection.NewRegistry()
+	registry.MustRegister(alarmas.Projections()...)
 
 	for feature, files := range cases {
 		feature, files := feature, files

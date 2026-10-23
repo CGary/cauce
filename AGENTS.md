@@ -47,12 +47,23 @@ The web push client (UUID v7 ids, `ts` from the browser clock, error handling) i
 - **Spec ambiguity.** Pick the simplest reading, implement it, and record the reading you took in SPEC section 8 ("Fuera de alcance y decisiones") with the prefix `(agente)`. Do not silently invent behavior.
 - **Secrets** never go in the repo. Use `.env` (gitignored) and document variables in `server/.env.example`.
 
+## The running server is a Docker container
+
+The owner's server runs in Docker Compose (`compose.yaml`, `docs/DECISIONS.md` D13). A change under `server/` (code, migrations, embedded schemas in `server/internal/core/event/schema/`, which mirror `schema/events/`) is **not live** until the image is rebuilt. `go test` passing does not mean the owner's server has it.
+
+- Check whether it is running: `docker compose ps --status running -q cauce`, which prints an id when it is up.
+- If it is running and you changed `server/` or `schema/events/`, redeploy with `just up`. That rebuilds the image, restarts the container and waits for `/healthz`. Migrations run on startup, so keep them additive. Then confirm the change is live with one `curl` against `http://127.0.0.1:8080` (e.g. the new projection under `/api/projections/<id>/<name>`), and report it.
+- If it is not running, do not start it; tell the owner to run `just up`.
+- The data lives in `deploy/data/` (bind mount) and survives rebuilds. Never delete it, never run `just restore`, `docker compose down -v` or anything that wipes or replaces data. Never touch `server/.env` or `cauce-backup-*.tar.gz`.
+- To test against a server, use an isolated instance like `scripts/test_portable.sh` does (own `COMPOSE_PROJECT_NAME`, `CAUCE_DATA_DIR`, `CAUCE_HOST_PORT`), never the owner's.
+
 ## Verification before you say "done"
 
 - `python3 scripts/lint_contract.py` passes.
 - `cd server && go test ./...` passes.
 - `cd android && ./gradlew :core:events:test :feature:<id>:test` passes (JVM only; no emulator required).
 - If the feature has web admin actions and `web/` is bootstrapped, `npm run build` in `web/` passes.
+- If you changed `server/` or `schema/events/` and the owner's server container is running, `just up` redeployed it and `/healthz` answers (see "The running server is a Docker container").
 - If you changed UI, build the debug APK once (`./gradlew :app:assembleDebug`) and report the path. Do not install anything.
 
 ## Style

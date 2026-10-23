@@ -47,6 +47,11 @@ If the spec is ambiguous, choose the simplest reading, implement it, and add a l
 ## 5. Finish
 
 - If you changed behavior the owner did not already record, bump `versión spec` and add a changelog line.
+- **Redeploy the server.** The owner's server runs in Docker, so your server changes are not live until the image is rebuilt (AGENTS.md, "The running server is a Docker container").
+  - If `docker compose ps --status running -q cauce` prints an id and you changed `server/` or `schema/events/`, run `just up`. It rebuilds, restarts and waits for `/healthz`.
+  - Then `curl` one of this feature's projections at `http://127.0.0.1:8080/api/projections/<id>/<name>` and report that it answers.
+  - If the container is not running, do not start it. Tell the owner to run `just up`.
+  - Never delete `deploy/data/`, never run `just restore` or `docker compose down -v`.
 - Build the debug APK only if UI changed; report the path, do not install.
 - Commit: `<id>: <what changed>`.
 - Summary: what converged, fixtures added, ambiguities resolved, anything left undone and why.

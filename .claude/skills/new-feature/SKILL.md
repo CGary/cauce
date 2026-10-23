@@ -73,6 +73,6 @@ Seven casilleros, in this order. Each one takes as many single-question rounds a
 
 ## 4. Validate and hand off
 
-- `python3 scripts/lint_contract.py` must pass. Missing event schemas make it fail: create minimal schemas for the events listed, or ask the owner (one question, with context) whether to defer.
+- `python3 scripts/lint_contract.py` must pass. Missing event schemas make it fail: create minimal schemas for the events listed, or ask the owner (one question, with context) whether to defer. After creating or editing any file in `schema/events/`, run `just sync-schemas` so the server's embedded copy matches; it is generated, so this is not a core change and `go test` fails without it.
 - Show the finished SPEC.md and end with: "Cuando lo apruebes, corré `/feature <id>`."
 - Do not implement anything.

@@ -8,6 +8,10 @@ default:
 lint:
     python3 scripts/lint_contract.py
 
+# Copia schema/ al espejo que el servidor embebe (correr tras editar schema/events/)
+sync-schemas:
+    cd server && go generate ./internal/core/event/
+
 test-server:
     cd server && go test ./...
 

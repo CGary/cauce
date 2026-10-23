@@ -55,13 +55,15 @@ func repoRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// The embedded copy also has schema/envelope.v1.json, so look for
+	// schema/features, which only the repository's contract tree has.
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "schema", "envelope.v1.json")); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, "schema", "features")); err == nil {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("repository root (schema/envelope.v1.json) not found from %s", dir)
+			return "", fmt.Errorf("repository root (schema/features) not found from %s", dir)
 		}
 		dir = parent
 	}

@@ -34,19 +34,26 @@
           "additionalProperties": false,
           "required": ["freq"],
           "properties": {
-            "freq": { "type": "string", "enum": ["DAILY", "WEEKLY", "HOURLY"] },
+            "freq": { "type": "string", "enum": ["DAILY", "WEEKLY", "MONTHLY", "HOURLY"] },
             "interval": {
               "type": "integer",
               "minimum": 1,
               "default": 1,
-              "description": "Cada cuántas unidades (días, semanas u horas según freq). 1 si se omite."
+              "description": "Cada cuántas unidades (días, semanas, meses u horas según freq). 1 si se omite."
             },
             "byday": {
               "type": "array",
               "minItems": 1,
               "uniqueItems": true,
-              "items": { "type": "string", "enum": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] },
-              "description": "Días de la semana, sin ordinales. Solo WEEKLY."
+              "items": { "type": "string", "pattern": "^(-1|[1-5])?(MO|TU|WE|TH|FR|SA|SU)$" },
+              "description": "Días de la semana. WEEKLY: sin ordinal, uno o más (MO..SU). MONTHLY: exactamente uno, con ordinal 1..5 (n-ésimo) o -1 (último), p. ej. 1MO, -1FR."
+            },
+            "bymonthday": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 31,
+              "not": { "const": 0 },
+              "description": "Día del mes (1..31) o -1 = último día. Solo MONTHLY. Un mes sin ese día se salta."
             },
             "count": {
               "type": "integer",
@@ -61,9 +68,25 @@
           },
           "allOf": [
             { "not": { "required": ["count", "until"] } },
+            { "not": { "required": ["byday", "bymonthday"] } },
+            {
+              "if": { "required": ["bymonthday"] },
+              "then": { "properties": { "freq": { "const": "MONTHLY" } } }
+            },
             {
               "if": { "required": ["byday"] },
-              "then": { "properties": { "freq": { "const": "WEEKLY" } }, "required": ["freq"] }
+              "then": { "properties": { "freq": { "enum": ["WEEKLY", "MONTHLY"] } } }
+            },
+            {
+              "if": { "properties": { "freq": { "const": "WEEKLY" } }, "required": ["byday"] },
+              "then": { "properties": { "byday": { "items": { "pattern": "^(MO|TU|WE|TH|FR|SA|SU)$" } } } }
+            },
+            {
+              "if": { "properties": { "freq": { "const": "MONTHLY" } } },
+              "then": {
+                "oneOf": [{ "required": ["byday"] }, { "required": ["bymonthday"] }],
+                "properties": { "byday": { "maxItems": 1, "items": { "pattern": "^(-1|[1-5])(MO|TU|WE|TH|FR|SA|SU)$" } } }
+              }
             }
           ]
         }

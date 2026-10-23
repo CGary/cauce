@@ -25,7 +25,7 @@ If another feature lists it under "Eventos consumidos", **stop**. Tell the owner
 
 ## 3. Contract first
 
-1. Create or update `schema/events/<tipo>.v<N>.json` for new or changed events. Never edit a published version incompatibly; bump N.
+1. Create or update `schema/events/<tipo>.v<N>.json` for new or changed events. Never edit a published version incompatibly; bump N. Then run `just sync-schemas`: the server embeds a copy of `schema/` under `server/internal/core/event/schema/`, and `go test` fails while it differs. The copy is generated, so updating it is not a core change.
 2. Write every fixture listed in section 7 under `schema/features/<id>/fixtures/<projection>/<case>.json`. Use `params.now` for time; never the clock. Derive expected values by hand from the rules in section 2 and 4 — do not run code to produce them.
 3. `python3 scripts/lint_contract.py` must pass.
 

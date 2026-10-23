@@ -60,6 +60,7 @@ The owner's server runs in Docker Compose (`compose.yaml`, `docs/DECISIONS.md` D
 ## Verification before you say "done"
 
 - `python3 scripts/lint_contract.py` passes.
+- If you changed `schema/events/` or `schema/envelope.v1.json`, `just sync-schemas` refreshed the server's embedded copy (generated, not a core change).
 - `cd server && go test ./...` passes.
 - `cd android && ./gradlew :core:events:test :feature:<id>:test` passes (JVM only; no emulator required).
 - If the feature has web admin actions and `web/` is bootstrapped, `npm run build` in `web/` passes.

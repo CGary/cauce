@@ -22,6 +22,11 @@ interface FeatureModule {
     /** Called once on app start, for device-side effects (alarms, widgets, services). */
     fun onAppStart(ctx: Context) {}
 
-    /** Called after a pull that brought any of [eventTypes], to re-apply device-side effects. */
-    fun onEventsPulled(types: Set<String>) {}
+    /**
+     * Called after a pull that brought any of [eventTypes], to re-apply device-side effects.
+     *
+     * [ctx] is the application context: use [cauceServices] on it to read the log or write an
+     * event, and the context itself to reach system services (AlarmManager, notifications).
+     */
+    fun onEventsPulled(ctx: Context, types: Set<String>) {}
 }

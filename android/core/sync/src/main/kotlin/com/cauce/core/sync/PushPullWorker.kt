@@ -16,7 +16,7 @@ class PushPullWorker(
 
         return try {
             val pulledTypes = engine.sync()
-            SyncRuntime.notifyPulled(pulledTypes)
+            SyncRuntime.notifyPulled(applicationContext, pulledTypes)
             Result.success()
         } catch (e: SyncHttpException) {
             if (e.code >= 500 || e.code == 429) Result.retry() else Result.failure()

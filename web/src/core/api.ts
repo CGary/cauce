@@ -13,7 +13,7 @@ export class ApiError extends Error {
 
 export type ProjectionParams = Record<string, string | undefined>
 
-const API_BASE: string = import.meta.env.VITE_API_BASE ?? ''
+export const API_BASE: string = import.meta.env.VITE_API_BASE ?? ''
 
 export function projectionUrl(feature: string, name: string, params: ProjectionParams = {}): URL {
   const url = new URL(`${API_BASE}/api/projections/${feature}/${name}`, window.location.origin)

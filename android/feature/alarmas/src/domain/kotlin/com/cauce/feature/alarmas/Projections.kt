@@ -153,7 +153,7 @@ internal object HistorialDosis : Projection<List<HistorialDosisEntry>> {
     }
 }
 
-private data class Alarm(
+internal data class Alarm(
     val id: String,
     val createdAt: Instant,
     val titulo: String,
@@ -184,7 +184,7 @@ private data class AlarmFields(
     val remedio: String?,
 )
 
-private fun foldAlarms(events: List<Envelope>): List<Alarm> {
+internal fun foldAlarms(events: List<Envelope>): List<Alarm> {
     val byId = linkedMapOf<String, MutableAlarm>()
     val deactivated = mutableSetOf<String>()
     events.withIndex()

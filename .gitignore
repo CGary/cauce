@@ -48,3 +48,6 @@ __pycache__/
 .DS_Store
 .vscode/
 *.swp
+
+# Local scratch (screenshots, dumps)
+.tmp/

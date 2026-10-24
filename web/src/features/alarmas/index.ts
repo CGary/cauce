@@ -11,6 +11,11 @@ export const alarmas: FeatureModule = {
       Component: lazy(() => import('./views/AdherenciaView')),
     },
     {
+      path: 'activas',
+      title: 'Activas',
+      Component: lazy(() => import('./views/ActivasView')),
+    },
+    {
       path: 'historial',
       title: 'Historial',
       Component: lazy(() => import('./views/HistorialView')),

@@ -181,6 +181,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) El ancla del calendario (P1/P2) es el `ts` del último `alarma_creada`; si no hay `alarma_creada` en el log, es el `ts` del último evento de estado (`alarma_creada` o `alarma_modificada`).
 - (agente) P3 filtra por `destinatario` antes de deduplicar.
 - (agente) En P3, los empates de `ts` se ordenan por `alarma_id` y luego por `programada_para`, ambos ascendentes.
+- (agente) Consola web de P1: pide solo `tz` (el endpoint inyecta `now`, igual que P2). El editor rellena destinatario y remedio desde P2, porque P1 no los trae. El `.ics` usa la fecha local de `proximo_disparo` como DTSTART (ocurrencia válida; P1 no trae el ts de creación). HOURLY cuyo COUNT no es divisible entre los VEVENTs reparte el resto en los primeros; sin count ni until, y si 24 no es divisible por interval, exporta 30 días desde ese ancla. `WKST` en un RRULE importado se ignora (Google lo emite; cauce usa WKST=MO).
 
 ## 9. Changelog
 

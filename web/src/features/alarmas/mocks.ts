@@ -1,13 +1,16 @@
 import { http, HttpResponse } from 'msw'
 // Datos del mock = valores `expected` de los fixtures del contrato, para que la UI vea las formas reales.
+import activas from '../../../../schema/features/alarmas/fixtures/alarmas_activas/caso_01_diaria.json'
 import adherencia from '../../../../schema/features/alarmas/fixtures/adherencia_tratamiento/caso_02_con_ignoradas.json'
 import historial from '../../../../schema/features/alarmas/fixtures/historial_dosis/caso_01_filtro_destinatario.json'
-import type { AdherenciaTratamiento, HistorialDosis } from './types'
+import type { AdherenciaTratamiento, AlarmaActiva, HistorialDosis } from './types'
 
+const activasRows = activas.expected satisfies AlarmaActiva[]
 const adherenciaRows = adherencia.expected satisfies AdherenciaTratamiento[]
 const historialRows = historial.expected satisfies HistorialDosis[]
 
 export const alarmasHandlers = [
+  http.get('*/api/projections/alarmas/alarmas_activas', () => HttpResponse.json(activasRows)),
   http.get('*/api/projections/alarmas/adherencia_tratamiento', () =>
     HttpResponse.json(adherenciaRows),
   ),

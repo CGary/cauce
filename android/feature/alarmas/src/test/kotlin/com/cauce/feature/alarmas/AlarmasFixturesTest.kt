@@ -23,7 +23,7 @@ class AlarmasFixturesTest {
         )
         val fixturesDir = schemaDir.resolve("features/alarmas/fixtures")
         val files = fixturesDir.walkTopDown().filter { it.isFile && it.extension == "json" }.sortedBy { it.path }.toList()
-        assertEquals(15, files.size, "expected 15 alarmas fixtures, found ${files.map { it.name }}")
+        assertEquals(16, files.size, "expected 16 alarmas fixtures, found ${files.map { it.name }}")
 
         val registry = ProjectionRegistry(AlarmasFeatureModule().projections)
         val failures = files.mapNotNull { file ->

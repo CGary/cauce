@@ -154,7 +154,14 @@ export default function ActivasView() {
     return rows.flatMap((row) => {
       const entry = rowsToBulk([row], extras)[0]
       if (!entry) return []
-      return [{ ...entry, alarma_id: row.alarma_id, proximo_disparo: row.proximo_disparo }]
+      return [
+        {
+          ...entry,
+          alarma_id: row.alarma_id,
+          proximo_disparo: row.proximo_disparo,
+          restantes: row.restantes,
+        },
+      ]
     })
   }
 

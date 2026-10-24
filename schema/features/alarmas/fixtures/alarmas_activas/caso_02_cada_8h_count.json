@@ -43,7 +43,8 @@
       "tipo": "remedio",
       "hora": "08:00",
       "repeticion": { "freq": "HOURLY", "interval": 8, "count": 15 },
-      "proximo_disparo": "2026-10-22T12:00:00Z"
+      "proximo_disparo": "2026-10-22T12:00:00Z",
+      "restantes": 9
     }
   ]
 }

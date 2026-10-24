@@ -194,6 +194,7 @@ type alarmaActiva struct {
 	Hora           string      `json:"hora"`
 	Repeticion     *repeticion `json:"repeticion"`
 	ProximoDisparo string      `json:"proximo_disparo"`
+	Restantes      *int        `json:"restantes,omitempty"`
 }
 
 func (AlarmasActivas) Run(events []event.Envelope, params projection.Params) (any, error) {
@@ -222,6 +223,11 @@ func (AlarmasActivas) Run(events []event.Envelope, params projection.Params) (an
 		if !ok {
 			continue
 		}
+		var restantes *int
+		if st.Repeticion != nil && st.Repeticion.Count != nil {
+			value := cal.remainingFirings(proximo)
+			restantes = &value
+		}
 		out = append(out, alarmaActiva{
 			AlarmaID:       st.AlarmaID,
 			Titulo:         st.Titulo,
@@ -229,6 +235,7 @@ func (AlarmasActivas) Run(events []event.Envelope, params projection.Params) (an
 			Hora:           st.Hora,
 			Repeticion:     st.Repeticion,
 			ProximoDisparo: proximo.UTC().Format(time.RFC3339),
+			Restantes:      restantes,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

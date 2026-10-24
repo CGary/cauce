@@ -2,6 +2,7 @@ package com.cauce.feature.alarmas
 
 import com.cauce.core.events.Envelope
 import com.cauce.core.events.projection.Projection
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -23,6 +24,8 @@ internal data class AlarmaActiva(
     val hora: String,
     val repeticion: JsonElement,
     @SerialName("proximo_disparo") val proximoDisparo: String,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val restantes: Int? = null,
 )
 
 @Serializable
@@ -61,10 +64,16 @@ internal object AlarmasActivas : Projection<List<AlarmaActiva>> {
                 val next = occurrences(alarm.createdAt, alarm.hora, alarm.rule, zone)
                     .firstOrNull { it.isAfter(now) }
                     ?: return@mapNotNull null
-                next to alarm
+                val restantes = if (alarm.rule?.count != null) {
+                    occurrences(alarm.createdAt, alarm.hora, alarm.rule, zone)
+                        .count { firing -> !firing.isBefore(next) }
+                } else {
+                    null
+                }
+                Triple(next, alarm, restantes)
             }
             .sortedWith(compareBy({ it.first }, { it.second.id }))
-            .map { (next, alarm) ->
+            .map { (next, alarm, restantes) ->
                 AlarmaActiva(
                     alarmaId = alarm.id,
                     titulo = alarm.titulo,
@@ -72,6 +81,7 @@ internal object AlarmasActivas : Projection<List<AlarmaActiva>> {
                     hora = alarm.horaRaw,
                     repeticion = alarm.repeticion,
                     proximoDisparo = formatUtc(next),
+                    restantes = restantes,
                 )
             }
     }

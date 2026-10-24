@@ -33,6 +33,7 @@ export interface AlarmaActiva {
   hora: string
   repeticion: ProyeccionRepeticion | null
   proximo_disparo: string
+  restantes?: number
 }
 
 /** Params de P1. `now` lo pone el servidor; ver SPEC §8 (agente). */

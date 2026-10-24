@@ -5,6 +5,7 @@ import { resolveTimeZone } from './windowsZones'
 export interface IcsSource extends BulkAlarma {
   alarma_id?: string
   proximo_disparo?: string
+  restantes?: number
 }
 
 export interface IcsExportOptions {
@@ -86,9 +87,21 @@ export function importIcs(text: string, options: { tz: string }): IcsImportResul
 
 function veventsFor(alarma: IcsSource, index: number, options: IcsExportOptions): string[][] {
   const anchor = anchorLocal(alarma, options)
-  const rep = alarma.repeticion
+  const rep = exportRepeticion(alarma)
   if (rep?.freq === 'HOURLY') return hourlyEvents(alarma, index, anchor, rep, options)
   return [renderEvent(alarma, uid(alarma, index), anchor, rep, options)]
+}
+
+function exportRepeticion(alarma: IcsSource): Repeticion | null {
+  const rep = alarma.repeticion
+  if (!rep) return null
+  const exported = { ...rep }
+  if (alarma.restantes === undefined) {
+    delete exported.count
+  } else {
+    exported.count = alarma.restantes
+  }
+  return exported
 }
 
 function hourlyEvents(

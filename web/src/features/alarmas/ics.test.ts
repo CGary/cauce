@@ -42,6 +42,7 @@ describe('ics', () => {
         hora: '09:00',
         repeticion: { freq: 'MONTHLY', byday: ['1MO'], count: 3 },
         proximo_disparo: '2026-11-02T13:00:00Z',
+        restantes: 3,
       }),
       source({
         alarma_id: 'a5',
@@ -156,6 +157,27 @@ describe('ics', () => {
     expect(parsed.errors.map((error) => error.index)).toEqual([1, 2, 3, 4])
   })
 
+  it('usa COUNT=restantes para una alarma con count a medio consumir', () => {
+    const text = exportIcs(
+      [
+        source({
+          alarma_id: 'c1',
+          titulo: 'Amoxicilina Juan',
+          tipo: 'remedio',
+          hora: '08:00',
+          repeticion: { freq: 'DAILY', count: 15 },
+          destinatario: 'Juan',
+          remedio: 'Amoxicilina',
+          proximo_disparo: '2026-10-22T12:00:00Z',
+          restantes: 8,
+        }),
+      ],
+      { tz, now },
+    )
+    expect(text).toContain('RRULE:FREQ=DAILY;COUNT=8')
+    expect(text).not.toContain('COUNT=15')
+  })
+
   it('HOURLY que divide a 24 se parte en VEVENTs diarios y reparte COUNT', () => {
     const text = exportIcs(
       [
@@ -168,6 +190,7 @@ describe('ics', () => {
           destinatario: 'Juan',
           remedio: 'Amoxicilina',
           proximo_disparo: '2026-10-20T12:00:00Z',
+          restantes: 15,
         }),
       ],
       { tz, now },
@@ -199,6 +222,7 @@ describe('ics', () => {
           hora: '08:00',
           repeticion: { freq: 'HOURLY', interval: 8, count: 2 },
           proximo_disparo: '2026-10-20T12:00:00Z',
+          restantes: 2,
         }),
       ],
       { tz, now },
@@ -244,6 +268,7 @@ describe('ics', () => {
           hora: '08:00',
           repeticion: { freq: 'HOURLY', interval: 5, count: 4 },
           proximo_disparo: '2026-10-23T14:00:00Z',
+          restantes: 4,
         }),
       ],
       { tz, now },

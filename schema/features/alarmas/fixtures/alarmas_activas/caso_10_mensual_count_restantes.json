@@ -1,0 +1,33 @@
+{
+  "projection": "alarmas.alarmas_activas",
+  "params": {
+    "now": "2026-11-16T15:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-10-01T15:00:00Z",
+      "payload": {
+        "alarma_id": "m4",
+        "titulo": "Control mensual",
+        "tipo": "otro",
+        "hora": "09:00",
+        "repeticion": { "freq": "MONTHLY", "bymonthday": 15, "count": 5 }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "m4",
+      "titulo": "Control mensual",
+      "tipo": "otro",
+      "hora": "09:00",
+      "repeticion": { "freq": "MONTHLY", "bymonthday": 15, "count": 5 },
+      "proximo_disparo": "2026-12-15T13:00:00Z",
+      "restantes": 3
+    }
+  ]
+}

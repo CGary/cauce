@@ -82,6 +82,20 @@ func localDate(t time.Time, loc *time.Location) string {
 	return t.In(loc).Format("2006-01-02")
 }
 
+func (c *calendario) remainingFirings(from time.Time) int {
+	if c.rep == nil || c.rep.Count == nil {
+		return 0
+	}
+	remaining := 0
+	c.eachFiring(func(t time.Time) bool {
+		if !t.Before(from) {
+			remaining++
+		}
+		return true
+	})
+	return remaining
+}
+
 // sequence returns a generator over the unbounded firing list (limits are
 // applied by eachFiring).
 func (c *calendario) sequence() func() (time.Time, bool) {

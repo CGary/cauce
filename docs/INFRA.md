@@ -53,6 +53,17 @@ TUNNEL_TOKEN=...
 
 No se abre ningún puerto en el router; la IP de casa no importa.
 
+### URL pública antes de tener dominio
+
+| Opción | URL fija | Requiere dominio | Quién puede entrar |
+| --- | --- | --- | --- |
+| Quick Tunnel de Cloudflare | No: aleatoria, cambia al reiniciar el servicio | No | Cualquiera que conozca la URL |
+| Tailscale Funnel | Sí: `https://<máquina>.<tailnet>.ts.net` | No | Pública, sin autenticación |
+| Tailscale Serve | Sí: la misma URL | No | Solo dispositivos dentro de la tailnet |
+| Túnel con nombre de Cloudflare + Access | Sí | Sí (es el destino final) | Solo quien pase Access |
+
+El servidor no autentica por sí mismo: confía en el proxy y usa `CAUCE_USER_ID`, así que cualquier opción pública queda abierta a quien conozca la URL hasta que exista Access. Y la consola web en otro origen necesita `CAUCE_CORS_ORIGIN` en el servidor.
+
 ## Cloudflare Access
 
 Dos aplicaciones en Zero Trust → Access:

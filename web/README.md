@@ -55,6 +55,9 @@ La salida queda en `dist/`. MSW y su service worker no entran al build.
 - **Root directory:** `web`
 - **Variable de entorno:** `VITE_API_BASE=https://api.<tu-dominio>`. Se lee en tiempo de build, así que cambiarla exige redeploy.
 - **Rutas:** sin `404.html`, Pages sirve `index.html` en cualquier ruta, que es lo que necesita React Router.
+- **CLI:** también se puede desplegar a mano con `VITE_API_BASE=<origen de la API> npm run build` (sin barra final) y, desde la raíz del repo, `wrangler pages deploy web/dist --project-name <proyecto>`.
+- **`_redirects`:** `public/_redirects` (`/*    /index.html   200`) es el fallback de SPA; Vite lo copia a `dist/`.
+- **CORS:** si la web vive en otro origen que la API, el servidor debe permitirlo con `CAUCE_CORS_ORIGIN` (ver `server/.env.example`), con el origen de la web.
 - **Acceso:** Cloudflare Access (login con Google) delante del sitio y de la API. Las peticiones salen con `credentials: 'include'` para que la cookie de Access viaje aunque la API esté en otro origen.
 
 ## Agregar un feature

@@ -14,8 +14,8 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 // inicial de React resulta un problema real.
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss()],
-  // El service worker de MSW solo se sirve en modo mock; nunca llega a dist/.
-  publicDir: mode === 'mock' ? 'mocks-public' : false,
+  // El service worker de MSW solo se sirve en modo mock; nunca llega a dist/. En el build normal, public/ aporta _redirects.
+  publicDir: mode === 'mock' ? 'mocks-public' : 'public',
   server: {
     proxy: { '/api': 'http://localhost:8080' },
     // Los mocks leen los fixtures del contrato en ../schema.

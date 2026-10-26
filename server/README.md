@@ -13,6 +13,7 @@ internal/config/           env-only configuration
 internal/core/event/       Envelope, JSON, embedded JSON Schema validation
 internal/core/store/       SQLite (modernc.org/sqlite), sqlc-generated queries
 internal/core/projection/  Projection interface + registry ("<feature>.<name>")
+internal/core/cors/        Minimal CORS middleware for the web console (CAUCE_CORS_ORIGIN)
 internal/sync/             POST /sync/push, GET /sync/pull
 internal/blobs/            POST /blobs/presign (presigned PUT for R2)
 internal/projections/      GET /api/projections/{feature}/{name}
@@ -39,6 +40,7 @@ go run ./cmd/cauce
 | `CAUCE_ADDR` | no | `:8080` | listen address |
 | `CAUCE_DB_PATH` | no | `cauce.db` | SQLite file; parent dir is created |
 | `CAUCE_USER_ID` | yes | — | single user id returned by `auth.UserFromRequest` |
+| `CAUCE_CORS_ORIGIN` | no | — (disabled) | exact origin of the web console (e.g. `https://example.pages.dev`); empty disables CORS |
 | `R2_ACCOUNT_ID` | for blobs | — | R2 account, endpoint is `https://<id>.r2.cloudflarestorage.com` |
 | `R2_ACCESS_KEY_ID` | for blobs | — | R2 token |
 | `R2_SECRET_ACCESS_KEY` | for blobs | — | R2 secret |

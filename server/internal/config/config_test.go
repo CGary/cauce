@@ -5,7 +5,7 @@ import "testing"
 func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
-		"CAUCE_ADDR", "CAUCE_DB_PATH", "CAUCE_USER_ID",
+		"CAUCE_ADDR", "CAUCE_DB_PATH", "CAUCE_USER_ID", "CAUCE_CORS_ORIGIN",
 		"R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET",
 	} {
 		t.Setenv(key, "")
@@ -20,7 +20,7 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Addr != ":8080" || cfg.DBPath != "cauce.db" || cfg.UserID != "u1" {
+	if cfg.Addr != ":8080" || cfg.DBPath != "cauce.db" || cfg.UserID != "u1" || cfg.CORSOrigin != "" {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 	if cfg.R2.Configured() {
@@ -40,6 +40,7 @@ func TestLoadFull(t *testing.T) {
 	t.Setenv("CAUCE_ADDR", "127.0.0.1:9999")
 	t.Setenv("CAUCE_DB_PATH", "/tmp/x.db")
 	t.Setenv("CAUCE_USER_ID", "u1")
+	t.Setenv("CAUCE_CORS_ORIGIN", "https://example.pages.dev")
 	t.Setenv("R2_ACCOUNT_ID", "acc")
 	t.Setenv("R2_ACCESS_KEY_ID", "key")
 	t.Setenv("R2_SECRET_ACCESS_KEY", "secret")
@@ -49,7 +50,7 @@ func TestLoadFull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Addr != "127.0.0.1:9999" || cfg.DBPath != "/tmp/x.db" {
+	if cfg.Addr != "127.0.0.1:9999" || cfg.DBPath != "/tmp/x.db" || cfg.CORSOrigin != "https://example.pages.dev" {
 		t.Fatalf("cfg = %+v", cfg)
 	}
 	if !cfg.R2.Configured() {

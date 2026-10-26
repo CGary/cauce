@@ -19,6 +19,7 @@ import (
 	"cauce/server/internal/auth"
 	"cauce/server/internal/blobs"
 	"cauce/server/internal/config"
+	"cauce/server/internal/core/cors"
 	"cauce/server/internal/core/event"
 	"cauce/server/internal/core/projection"
 	"cauce/server/internal/core/store"
@@ -115,7 +116,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           mux,
+		Handler:           cors.Middleware(cfg.CORSOrigin, mux),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

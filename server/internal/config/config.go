@@ -10,10 +10,11 @@ import (
 
 // Config is the complete runtime configuration.
 type Config struct {
-	Addr   string
-	DBPath string
-	UserID string
-	R2     R2
+	Addr       string
+	DBPath     string
+	UserID     string
+	CORSOrigin string
+	R2         R2
 }
 
 // R2 holds the Cloudflare R2 (S3-compatible) credentials. All four fields are
@@ -33,9 +34,10 @@ func (r R2) Configured() bool {
 // Load reads and validates the environment.
 func Load() (Config, error) {
 	cfg := Config{
-		Addr:   strings.TrimSpace(os.Getenv("CAUCE_ADDR")),
-		DBPath: strings.TrimSpace(os.Getenv("CAUCE_DB_PATH")),
-		UserID: strings.TrimSpace(os.Getenv("CAUCE_USER_ID")),
+		Addr:       strings.TrimSpace(os.Getenv("CAUCE_ADDR")),
+		DBPath:     strings.TrimSpace(os.Getenv("CAUCE_DB_PATH")),
+		UserID:     strings.TrimSpace(os.Getenv("CAUCE_USER_ID")),
+		CORSOrigin: strings.TrimSpace(os.Getenv("CAUCE_CORS_ORIGIN")),
 		R2: R2{
 			AccountID:       strings.TrimSpace(os.Getenv("R2_ACCOUNT_ID")),
 			AccessKeyID:     strings.TrimSpace(os.Getenv("R2_ACCESS_KEY_ID")),

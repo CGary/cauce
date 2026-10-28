@@ -20,6 +20,9 @@ func Middleware(origin string, next http.Handler) http.Handler {
 		}
 		h := w.Header()
 		h.Set("Access-Control-Allow-Origin", origin)
+		// The web fetches with credentials (Cloudflare Access cookie); browsers reject
+		// a credentialed response without this. Safe: origin is one exact value.
+		h.Set("Access-Control-Allow-Credentials", "true")
 		h.Add("Vary", "Origin")
 		h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		h.Set("Access-Control-Allow-Headers", "Content-Type")

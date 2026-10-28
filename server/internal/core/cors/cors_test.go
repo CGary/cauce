@@ -103,10 +103,13 @@ func TestMiddleware(t *testing.T) {
 				t.Fatalf("Access-Control-Allow-Origin = %q", got)
 			}
 			if !tt.wantHeaders {
-				if h.Get("Access-Control-Allow-Origin") != "" || h.Get("Vary") != "" {
+				if h.Get("Access-Control-Allow-Origin") != "" || h.Get("Access-Control-Allow-Credentials") != "" || h.Get("Vary") != "" {
 					t.Fatalf("unexpected CORS headers: %v", h)
 				}
 				return
+			}
+			if got := h.Get("Access-Control-Allow-Credentials"); got != "true" {
+				t.Fatalf("Access-Control-Allow-Credentials = %q, want %q", got, "true")
 			}
 			if got := h.Get("Vary"); got != "Origin" {
 				t.Fatalf("Vary = %q, want %q", got, "Origin")

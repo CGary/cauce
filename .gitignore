@@ -8,6 +8,7 @@
 key.properties
 signing.properties
 .cloudflared/
+.wrangler/
 
 # Go
 server/cauce

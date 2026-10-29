@@ -10,15 +10,17 @@ import (
 
 // calendario generates the firing instants of one alarm in its time zone. The
 // first firing is the first occurrence of `hora` strictly after the creation
-// ts (alarma_creada.ts); the RRULE subset repeats from there. `count` and
-// `until` end the sequence, months without the requested day are skipped and
-// do not consume `count` (RFC 5545).
+// ts (alarma_creada.ts), or at or after the anchor when it comes from `fecha`
+// (inclusive; SPEC section 4). The RRULE subset repeats from there. `count`
+// and `until` end the sequence, months without the requested day are skipped
+// and do not consume `count` (RFC 5545).
 type calendario struct {
-	loc    *time.Location
-	hour   int
-	min    int
-	anchor time.Time
-	rep    *repeticion
+	loc       *time.Location
+	hour      int
+	min       int
+	anchor    time.Time
+	inclusive bool
+	rep       *repeticion
 }
 
 func newCalendario(hora string, rep *repeticion, anchor time.Time, loc *time.Location) (*calendario, error) {
@@ -43,6 +45,16 @@ func parseHora(hora string) (int, int, error) {
 		return 0, 0, fmt.Errorf("hora %q: invalid minute", hora)
 	}
 	return hour, min, nil
+}
+
+// parseFecha parses the local date "YYYY-MM-DD" of alarma_creada.v3.
+func parseFecha(fecha string) (int, time.Month, int, error) {
+	t, err := time.Parse("2006-01-02", fecha)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("fecha %q: want AAAA-MM-DD", fecha)
+	}
+	y, m, d := t.Date()
+	return y, m, d, nil
 }
 
 // eachFiring calls fn for every firing in chronological order, stopping when
@@ -164,14 +176,24 @@ func (c *calendario) firstFiring() (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// firstHora returns the first occurrence of `hora` strictly after the anchor.
+// firstHora returns the first occurrence of `hora` at or after the anchor: the
+// anchor itself when it comes from `fecha`, strictly after otherwise.
 func (c *calendario) firstHora() time.Time {
 	y, m, d := c.anchor.In(c.loc).Date()
 	t := c.horaLocal(y, m, d)
-	if !t.After(c.anchor) {
+	if !c.reachesAnchor(t) {
 		t = c.horaLocal(y, m, d+1)
 	}
 	return t
+}
+
+// reachesAnchor reports whether t is a valid first firing: strictly after the
+// anchor, or at or after it when the anchor is the `fecha` instant.
+func (c *calendario) reachesAnchor(t time.Time) bool {
+	if c.inclusive {
+		return !t.Before(c.anchor)
+	}
+	return t.After(c.anchor)
 }
 
 // horaLocal builds the wall time (y, m, d, c.hour, c.min) in c.loc applying
@@ -179,13 +201,19 @@ func (c *calendario) firstHora() time.Time {
 // UTC offset in effect before the gap (02:30 New York on a spring-forward day
 // fires at 03:30), and an ambiguous one resolves to its first occurrence.
 func (c *calendario) horaLocal(y int, m time.Month, d int) time.Time {
-	u := time.Date(y, m, d, c.hour, c.min, 0, 0, time.UTC)
-	preGap := offsetAt(time.Date(y, m, d-1, 23, 0, 0, 0, c.loc))
+	return horaLocal(y, m, d, c.hour, c.min, c.loc)
+}
+
+// horaLocal is the DST-aware wall-time builder used by the calendar and by the
+// aviso rule of calendario_google.
+func horaLocal(y int, m time.Month, d, hour, min int, loc *time.Location) time.Time {
+	u := time.Date(y, m, d, hour, min, 0, 0, time.UTC)
+	preGap := offsetAt(time.Date(y, m, d-1, 23, 0, 0, 0, loc))
 	offs := []int{preGap}
 	for _, p := range []time.Time{
-		time.Date(y, m, d, 0, 0, 0, 0, c.loc),
-		time.Date(y, m, d, 12, 0, 0, 0, c.loc),
-		time.Date(y, m, d+1, 0, 0, 0, 0, c.loc),
+		time.Date(y, m, d, 0, 0, 0, 0, loc),
+		time.Date(y, m, d, 12, 0, 0, 0, loc),
+		time.Date(y, m, d+1, 0, 0, 0, 0, loc),
 	} {
 		if off := offsetAt(p); !containsInt(offs, off) {
 			offs = append(offs, off)
@@ -194,9 +222,9 @@ func (c *calendario) horaLocal(y int, m time.Month, d int) time.Time {
 	var occs []time.Time
 	for _, off := range offs {
 		cand := u.Add(-time.Duration(off) * time.Second)
-		yy, mm, dd := cand.In(c.loc).Date()
-		hh, mi, _ := cand.In(c.loc).Clock()
-		if yy == y && mm == m && dd == d && hh == c.hour && mi == c.min {
+		yy, mm, dd := cand.In(loc).Date()
+		hh, mi, _ := cand.In(loc).Clock()
+		if yy == y && mm == m && dd == d && hh == hour && mi == min {
 			occs = append(occs, cand)
 		}
 	}
@@ -304,8 +332,8 @@ func (c *calendario) weeklyOffsets(first time.Time) []int {
 	return offsets
 }
 
-// firstMonthly returns the first occurrence of `hora` strictly after the
-// anchor whose day matches the MONTHLY rule (bymonthday or byday ordinal).
+// firstMonthly returns the first occurrence of `hora` at or after the anchor
+// whose day matches the MONTHLY rule (bymonthday or byday ordinal).
 func (c *calendario) firstMonthly() (time.Time, bool) {
 	y, m, _ := c.anchor.In(c.loc).Date()
 	for i := 0; i < 1200; i++ {
@@ -315,7 +343,7 @@ func (c *calendario) firstMonthly() (time.Time, bool) {
 			continue
 		}
 		t := c.horaLocal(my, mm, d)
-		if t.After(c.anchor) {
+		if c.reachesAnchor(t) {
 			return t, true
 		}
 	}

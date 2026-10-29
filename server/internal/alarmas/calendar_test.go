@@ -289,3 +289,91 @@ func TestCreadaAnchorOutOfOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestFechaAnchor covers the `fecha` anchor of SPEC section 4: with fecha the
+// first firing is the first occurrence of `hora` at or after `fecha` at `hora`
+// that satisfies the rule (fecha itself if valid), and count/interval count
+// from there even when the alarma_creada came later.
+func TestFechaAnchor(t *testing.T) {
+	tests := []struct {
+		name   string
+		hora   string
+		rep    *repeticion
+		fecha  string
+		creada string // RFC 3339; the alarma_creada.ts
+		tz     string
+		want   []string // first firings, RFC 3339 UTC
+		total  int      // firings the whole sequence has; 0 = continues past want
+	}{
+		{
+			name:   "MONTHLY count counts from fecha, not from the creation ts",
+			hora:   "09:00",
+			rep:    &repeticion{Freq: "MONTHLY", Bymonthday: intPtr(20), Count: intPtr(3)},
+			fecha:  "2026-11-20",
+			creada: "2026-11-25T12:00:00Z", // created after the first firing
+			tz:     "America/La_Paz",
+			want: []string{
+				"2026-11-20T13:00:00Z", // fecha itself is the first firing
+				"2026-12-20T13:00:00Z",
+				"2027-01-20T13:00:00Z",
+			},
+			total: 3,
+		},
+		{
+			name:   "WEEKLY with fecha on a non-matching day moves forward",
+			hora:   "15:00",
+			rep:    &repeticion{Freq: "WEEKLY", Byday: []string{"MO"}, Interval: intPtr(2)},
+			fecha:  "2026-11-22", // Sunday: the next Monday is in the next ISO week
+			creada: "2026-11-01T12:00:00Z",
+			tz:     "America/La_Paz",
+			want: []string{
+				"2026-11-23T19:00:00Z", // moved forward to the first Monday
+				"2026-12-07T19:00:00Z", // interval 2 from the week of that firing
+				"2026-12-21T19:00:00Z",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			loc, err := time.LoadLocation(tt.tz)
+			if err != nil {
+				t.Fatalf("LoadLocation(%s): %v", tt.tz, err)
+			}
+			creada, err := time.Parse(time.RFC3339, tt.creada)
+			if err != nil {
+				t.Fatalf("creada: %v", err)
+			}
+			st := &alarma{
+				alarmaPayload: alarmaPayload{
+					AlarmaID:   "a1",
+					Hora:       tt.hora,
+					Fecha:      tt.fecha,
+					Repeticion: tt.rep,
+				},
+				creada: creada,
+			}
+			ix := &indice{}
+			cal, err := ix.calendario(st, loc)
+			if err != nil {
+				t.Fatalf("calendario: %v", err)
+			}
+			got := []string{}
+			cal.eachFiring(func(f time.Time) bool {
+				got = append(got, f.UTC().Format(time.RFC3339))
+				return len(got) < len(tt.want)+1
+			})
+			if tt.total > 0 {
+				if len(got) != tt.total {
+					t.Fatalf("sequence length = %d, want %d (firings %v)", len(got), tt.total, got)
+				}
+			} else if len(got) != len(tt.want)+1 {
+				t.Fatalf("sequence ended after %d firings, want more than %d (firings %v)", len(got), len(tt.want), got)
+			}
+			for i, want := range tt.want {
+				if got[i] != want {
+					t.Errorf("firing[%d] = %s, want %s", i, got[i], want)
+				}
+			}
+		})
+	}
+}

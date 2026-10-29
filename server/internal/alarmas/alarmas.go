@@ -35,13 +35,15 @@ func (r *repeticion) intervalDays() int {
 	return *r.Interval
 }
 
-// alarmaPayload is the full state of alarma_creada.v2 / alarma_modificada.v2.
-// Unknown fields are ignored by encoding/json.
+// alarmaPayload is the full state of alarma_creada.v2 / alarma_modificada.v2
+// and .v3 (v3 adds the optional `fecha`, the calendar anchor of SPEC section
+// 4). Unknown fields are ignored by encoding/json.
 type alarmaPayload struct {
 	AlarmaID     string      `json:"alarma_id"`
 	Titulo       string      `json:"titulo"`
 	Tipo         string      `json:"tipo"`
 	Hora         string      `json:"hora"`
+	Fecha        string      `json:"fecha"`
 	Repeticion   *repeticion `json:"repeticion"`
 	Destinatario string      `json:"destinatario"`
 	Remedio      string      `json:"remedio"`
@@ -71,24 +73,54 @@ type atendidaEvento struct {
 	accion     string
 }
 
+// reunion is the vigente state of one meeting occurrence: the last event by
+// ts between reunion_sincronizada and reunion_eliminada_en_origen
+// (calendario_google section 4). On a ts tie the later event in input order
+// wins, like the alarms.
+type reunion struct {
+	serieID      string
+	titulo       string
+	inicio       time.Time
+	todoElDia    bool
+	recordatorio *int
+	estado       string
+	respuesta    string
+	ts           time.Time
+	eliminada    bool
+}
+
+// avisoEditado is the vigente aviso of one series (last
+// aviso_reunion_editado by ts, same tie rule).
+type avisoEditado struct {
+	minutosAntes *int
+	hora         string
+	apagado      bool
+	ts           time.Time
+}
+
 // indice is the whole event log reduced to what the three projections need.
 type indice struct {
 	estados      map[string]*alarma
 	desactivadas map[string]bool
 	dosis        []*dosisEvento
 	atendidas    []atendidaEvento
+	reuniones    map[string]*reunion
+	avisos       map[string]*avisoEditado
 }
 
 func indexar(events []event.Envelope) (*indice, error) {
 	ix := &indice{
 		estados:      map[string]*alarma{},
 		desactivadas: map[string]bool{},
+		reuniones:    map[string]*reunion{},
+		avisos:       map[string]*avisoEditado{},
 	}
 	for _, ev := range events {
 		switch ev.Type {
 		case "alarma_creada", "alarma_modificada":
-			// (SPEC section 8): the projections read only v2.
-			if ev.V != 2 {
+			// (SPEC section 3): the projections read v2 and v3; v3 is v2
+			// plus the optional `fecha` anchor.
+			if ev.V != 2 && ev.V != 3 {
 				continue
 			}
 			var p alarmaPayload
@@ -159,12 +191,123 @@ func indexar(events []event.Envelope) (*indice, error) {
 				programada: p.Programada,
 				accion:     p.Accion,
 			})
+		case "reunion_sincronizada":
+			var p struct {
+				ReunionID       string `json:"reunion_id"`
+				SerieID         string `json:"serie_id"`
+				Titulo          string `json:"titulo"`
+				Inicio          string `json:"inicio"`
+				TodoElDia       bool   `json:"todo_el_dia"`
+				RecordatorioMin *int   `json:"recordatorio_min"`
+				Estado          string `json:"estado"`
+				Respuesta       string `json:"respuesta"`
+			}
+			if err := json.Unmarshal(ev.Payload, &p); err != nil {
+				return nil, fmt.Errorf("event %s: %w", ev.ID, err)
+			}
+			if p.ReunionID == "" {
+				return nil, fmt.Errorf("event %s: missing reunion_id", ev.ID)
+			}
+			ts, err := time.Parse(time.RFC3339, ev.TS)
+			if err != nil {
+				return nil, fmt.Errorf("event %s: ts: %w", ev.ID, err)
+			}
+			inicio, err := time.Parse(time.RFC3339, p.Inicio)
+			if err != nil {
+				return nil, fmt.Errorf("event %s: inicio: %w", ev.ID, err)
+			}
+			st := ix.reuniones[p.ReunionID]
+			if st == nil {
+				st = &reunion{}
+				ix.reuniones[p.ReunionID] = st
+			}
+			if st.ts.IsZero() || !ts.Before(st.ts) {
+				*st = reunion{
+					serieID:      p.SerieID,
+					titulo:       p.Titulo,
+					inicio:       inicio,
+					todoElDia:    p.TodoElDia,
+					recordatorio: p.RecordatorioMin,
+					estado:       p.Estado,
+					respuesta:    p.Respuesta,
+					ts:           ts,
+				}
+			}
+		case "reunion_eliminada_en_origen":
+			var p struct {
+				ReunionID string `json:"reunion_id"`
+			}
+			if err := json.Unmarshal(ev.Payload, &p); err != nil {
+				return nil, fmt.Errorf("event %s: %w", ev.ID, err)
+			}
+			if p.ReunionID == "" {
+				return nil, fmt.Errorf("event %s: missing reunion_id", ev.ID)
+			}
+			ts, err := time.Parse(time.RFC3339, ev.TS)
+			if err != nil {
+				return nil, fmt.Errorf("event %s: ts: %w", ev.ID, err)
+			}
+			st := ix.reuniones[p.ReunionID]
+			if st == nil {
+				st = &reunion{}
+				ix.reuniones[p.ReunionID] = st
+			}
+			if st.ts.IsZero() || !ts.Before(st.ts) {
+				st.ts = ts
+				st.eliminada = true
+			}
+		case "aviso_reunion_editado":
+			var p struct {
+				SerieID      string `json:"serie_id"`
+				MinutosAntes *int   `json:"minutos_antes"`
+				Hora         string `json:"hora"`
+				Apagado      bool   `json:"apagado"`
+			}
+			if err := json.Unmarshal(ev.Payload, &p); err != nil {
+				return nil, fmt.Errorf("event %s: %w", ev.ID, err)
+			}
+			if p.SerieID == "" {
+				return nil, fmt.Errorf("event %s: missing serie_id", ev.ID)
+			}
+			ts, err := time.Parse(time.RFC3339, ev.TS)
+			if err != nil {
+				return nil, fmt.Errorf("event %s: ts: %w", ev.ID, err)
+			}
+			st := ix.avisos[p.SerieID]
+			if st == nil {
+				st = &avisoEditado{}
+				ix.avisos[p.SerieID] = st
+			}
+			if st.ts.IsZero() || !ts.Before(st.ts) {
+				*st = avisoEditado{
+					minutosAntes: p.MinutosAntes,
+					hora:         p.Hora,
+					apagado:      p.Apagado,
+					ts:           ts,
+				}
+			}
 		}
 	}
 	return ix, nil
 }
 
 func (ix *indice) calendario(st *alarma, loc *time.Location) (*calendario, error) {
+	if st.Fecha != "" {
+		// SPEC section 4: with `fecha` the anchor is the local instant of
+		// fecha at hora, and the first firing is the first occurrence at or
+		// after it (the anchor itself when it satisfies the rule).
+		y, m, d, err := parseFecha(st.Fecha)
+		if err != nil {
+			return nil, fmt.Errorf("alarma %s: %w", st.AlarmaID, err)
+		}
+		cal, err := newCalendario(st.Hora, st.Repeticion, time.Time{}, loc)
+		if err != nil {
+			return nil, err
+		}
+		cal.anchor = cal.horaLocal(y, m, d)
+		cal.inclusive = true
+		return cal, nil
+	}
 	anchor := st.creada
 	if anchor.IsZero() {
 		// A modificada without its creada in the log: anchor on the edit's ts.
@@ -238,6 +381,27 @@ func (AlarmasActivas) Run(events []event.Envelope, params projection.Params) (an
 			Restantes:      restantes,
 		})
 	}
+	for id, r := range ix.reuniones {
+		// (SPEC section 4, rule 2.10): only confirmada and not rechazada.
+		if r.eliminada || r.estado != "confirmada" || r.respuesta == "rechazada" {
+			continue
+		}
+		aviso, ok, err := r.avisoEn(ix.avisos[r.serieID], loc)
+		if err != nil {
+			return nil, err
+		}
+		if !ok || !aviso.After(now) {
+			continue
+		}
+		out = append(out, alarmaActiva{
+			AlarmaID:       "gcal:" + id,
+			Titulo:         r.titulo,
+			Tipo:           "reunion",
+			Hora:           aviso.In(loc).Format("15:04"),
+			Repeticion:     nil,
+			ProximoDisparo: aviso.UTC().Format(time.RFC3339),
+		})
+	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].ProximoDisparo != out[j].ProximoDisparo {
 			return out[i].ProximoDisparo < out[j].ProximoDisparo
@@ -245,6 +409,38 @@ func (AlarmasActivas) Run(events []event.Envelope, params projection.Params) (an
 		return out[i].AlarmaID < out[j].AlarmaID
 	})
 	return out, nil
+}
+
+// avisoEn applies the aviso rule of calendario_google section 4 verbatim:
+// edited (apagado / minutos_antes / hora) wins over the all-day default
+// (08:00), the Google reminder and the 10-minute fallback. ok=false is an
+// edited `apagado`: the meeting does not sound at all.
+func (r *reunion) avisoEn(ed *avisoEditado, loc *time.Location) (time.Time, bool, error) {
+	y, m, d := r.inicio.In(loc).Date()
+	if r.todoElDia {
+		y, m, d = r.inicio.UTC().Date()
+	}
+	if ed != nil {
+		switch {
+		case ed.apagado:
+			return time.Time{}, false, nil
+		case ed.minutosAntes != nil:
+			return r.inicio.Add(-time.Duration(*ed.minutosAntes) * time.Minute), true, nil
+		case ed.hora != "":
+			hour, min, err := parseHora(ed.hora)
+			if err != nil {
+				return time.Time{}, false, err
+			}
+			return horaLocal(y, m, d, hour, min, loc), true, nil
+		}
+	}
+	if r.todoElDia {
+		return horaLocal(y, m, d, 8, 0, loc), true, nil
+	}
+	if r.recordatorio != nil {
+		return r.inicio.Add(-time.Duration(*r.recordatorio) * time.Minute), true, nil
+	}
+	return r.inicio.Add(-10 * time.Minute), true, nil
 }
 
 // AdherenciaTratamiento is P2: expected, taken and ignored doses per remedy

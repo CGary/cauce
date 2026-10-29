@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/reunion_sincronizada.v1.json",
+  "title": "reunion_sincronizada",
+  "description": "Una ocurrencia de reunión leída del calendario del teléfono (todas las cuentas de Google). Estado completo: gana el último ts por reunion_id. Feature dueño: calendario_google.",
+  "type": "object",
+  "required": ["reunion_id", "serie_id", "cuenta", "titulo", "inicio", "fin", "todo_el_dia", "recordatorio_min", "estado", "respuesta"],
+  "properties": {
+    "reunion_id": { "type": "string", "minLength": 1, "description": "Estable por ocurrencia: derivado del evento de Android y del inicio original de la ocurrencia." },
+    "serie_id": { "type": "string", "minLength": 1, "description": "Igual para todas las ocurrencias de la misma reunión repetida. En una reunión única, igual a su propio id." },
+    "cuenta": { "type": "string", "minLength": 1, "maxLength": 200, "description": "La cuenta de Google tal como la muestra el teléfono." },
+    "calendario": { "type": "string", "maxLength": 200 },
+    "titulo": { "type": "string", "maxLength": 300 },
+    "inicio": { "type": "string", "format": "date-time" },
+    "fin": { "type": "string", "format": "date-time" },
+    "todo_el_dia": { "type": "boolean", "description": "Si es true, inicio y fin son las medianoches UTC del primer día y del día siguiente." },
+    "recordatorio_min": { "type": ["integer", "null"], "minimum": 0, "description": "El recordatorio más temprano de Google, en minutos antes del inicio. null si no tiene." },
+    "estado": { "type": "string", "enum": ["confirmada", "cancelada"] },
+    "respuesta": { "type": "string", "enum": ["aceptada", "tentativa", "rechazada", "sin_respuesta"] }
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "projection": "calendario_google.reuniones_proximas",
+  "params": {
+    "now": "2026-11-02T12:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "r1",
+        "serie_id": "r1",
+        "cuenta": "ana.trabajo@example.com",
+        "titulo": "Movida",
+        "inicio": "2026-11-02T14:00:00Z",
+        "fin": "2026-11-02T15:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 10,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    },
+    {
+      "id": "e2",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-02T07:00:00Z",
+      "payload": {
+        "reunion_id": "r1",
+        "serie_id": "r1",
+        "cuenta": "ana.trabajo@example.com",
+        "titulo": "Movida (nuevo horario)",
+        "inicio": "2026-11-02T16:00:00Z",
+        "fin": "2026-11-02T17:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 10,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    },
+    {
+      "id": "e3",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "r2",
+        "serie_id": "r2",
+        "cuenta": "ana.trabajo@example.com",
+        "titulo": "Ya empezó",
+        "inicio": "2026-11-02T11:30:00Z",
+        "fin": "2026-11-02T12:30:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 10,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    },
+    {
+      "id": "e4",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "r3",
+        "serie_id": "r3",
+        "cuenta": "ana.personal@example.com",
+        "titulo": "Aviso ya sonó",
+        "inicio": "2026-11-02T12:30:00Z",
+        "fin": "2026-11-02T13:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 60,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "reunion_id": "r3",
+      "serie_id": "r3",
+      "cuenta": "ana.personal@example.com",
+      "titulo": "Aviso ya sonó",
+      "inicio": "2026-11-02T12:30:00Z",
+      "fin": "2026-11-02T13:00:00Z",
+      "todo_el_dia": false,
+      "aviso": {
+        "origen": "google",
+        "minutos_antes": 60
+      },
+      "aviso_en": "2026-11-02T11:30:00Z"
+    },
+    {
+      "reunion_id": "r1",
+      "serie_id": "r1",
+      "cuenta": "ana.trabajo@example.com",
+      "titulo": "Movida (nuevo horario)",
+      "inicio": "2026-11-02T16:00:00Z",
+      "fin": "2026-11-02T17:00:00Z",
+      "todo_el_dia": false,
+      "aviso": {
+        "origen": "google",
+        "minutos_antes": 10
+      },
+      "aviso_en": "2026-11-02T15:50:00Z"
+    }
+  ]
+}

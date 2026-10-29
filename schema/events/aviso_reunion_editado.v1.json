@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/aviso_reunion_editado.v1.json",
+  "title": "aviso_reunion_editado",
+  "description": "El aviso editado en cauce para toda una serie de reuniones; manda sobre el recordatorio heredado de Google. Exactamente uno de minutos_antes (con hora), hora (todo el día) o apagado. Estado completo: gana el último ts por serie_id. Feature dueño: calendario_google.",
+  "type": "object",
+  "required": ["serie_id"],
+  "properties": {
+    "serie_id": { "type": "string", "minLength": 1 },
+    "minutos_antes": { "type": "integer", "minimum": 0, "description": "Reuniones con hora: minutos antes del inicio." },
+    "hora": { "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$", "description": "Reuniones de todo el día: hora local del aviso." },
+    "apagado": { "const": true }
+  },
+  "oneOf": [
+    { "required": ["minutos_antes"], "not": { "anyOf": [ { "required": ["hora"] }, { "required": ["apagado"] } ] } },
+    { "required": ["hora"], "not": { "anyOf": [ { "required": ["minutos_antes"] }, { "required": ["apagado"] } ] } },
+    { "required": ["apagado"], "not": { "anyOf": [ { "required": ["minutos_antes"] }, { "required": ["hora"] } ] } }
+  ]
+}

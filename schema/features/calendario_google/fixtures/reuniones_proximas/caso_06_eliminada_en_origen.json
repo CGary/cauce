@@ -1,0 +1,97 @@
+{
+  "projection": "calendario_google.reuniones_proximas",
+  "params": {
+    "now": "2026-11-02T12:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "r1",
+        "serie_id": "r1",
+        "cuenta": "ana.trabajo@example.com",
+        "titulo": "Borrada en Google",
+        "inicio": "2026-11-03T14:00:00Z",
+        "fin": "2026-11-03T15:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 10,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    },
+    {
+      "id": "e2",
+      "type": "reunion_eliminada_en_origen",
+      "v": 1,
+      "ts": "2026-11-02T08:00:00Z",
+      "payload": {
+        "reunion_id": "r1"
+      }
+    },
+    {
+      "id": "e3",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "r2",
+        "serie_id": "r2",
+        "cuenta": "ana.trabajo@example.com",
+        "titulo": "Revivida",
+        "inicio": "2026-11-04T14:00:00Z",
+        "fin": "2026-11-04T15:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 10,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    },
+    {
+      "id": "e4",
+      "type": "reunion_eliminada_en_origen",
+      "v": 1,
+      "ts": "2026-11-01T22:00:00Z",
+      "payload": {
+        "reunion_id": "r2"
+      }
+    },
+    {
+      "id": "e5",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-02T08:00:00Z",
+      "payload": {
+        "reunion_id": "r2",
+        "serie_id": "r2",
+        "cuenta": "ana.trabajo@example.com",
+        "titulo": "Revivida",
+        "inicio": "2026-11-04T14:00:00Z",
+        "fin": "2026-11-04T15:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 10,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "reunion_id": "r2",
+      "serie_id": "r2",
+      "cuenta": "ana.trabajo@example.com",
+      "titulo": "Revivida",
+      "inicio": "2026-11-04T14:00:00Z",
+      "fin": "2026-11-04T15:00:00Z",
+      "todo_el_dia": false,
+      "aviso": {
+        "origen": "google",
+        "minutos_antes": 10
+      },
+      "aviso_en": "2026-11-04T13:50:00Z"
+    }
+  ]
+}

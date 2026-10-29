@@ -1,0 +1,76 @@
+{
+  "projection": "calendario_google.reuniones_proximas",
+  "params": {
+    "now": "2026-11-02T12:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "r1",
+        "serie_id": "r1",
+        "cuenta": "ana.trabajo@example.com",
+        "titulo": "Reunión de equipo",
+        "inicio": "2026-11-02T14:00:00Z",
+        "fin": "2026-11-02T15:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 30,
+        "estado": "confirmada",
+        "respuesta": "aceptada",
+        "calendario": "Trabajo"
+      }
+    },
+    {
+      "id": "e2",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "r2",
+        "serie_id": "r2",
+        "cuenta": "ana.personal@example.com",
+        "titulo": "Dentista",
+        "inicio": "2026-11-03T18:30:00Z",
+        "fin": "2026-11-03T19:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 0,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "reunion_id": "r1",
+      "serie_id": "r1",
+      "cuenta": "ana.trabajo@example.com",
+      "titulo": "Reunión de equipo",
+      "inicio": "2026-11-02T14:00:00Z",
+      "fin": "2026-11-02T15:00:00Z",
+      "todo_el_dia": false,
+      "aviso": {
+        "origen": "google",
+        "minutos_antes": 30
+      },
+      "aviso_en": "2026-11-02T13:30:00Z"
+    },
+    {
+      "reunion_id": "r2",
+      "serie_id": "r2",
+      "cuenta": "ana.personal@example.com",
+      "titulo": "Dentista",
+      "inicio": "2026-11-03T18:30:00Z",
+      "fin": "2026-11-03T19:00:00Z",
+      "todo_el_dia": false,
+      "aviso": {
+        "origen": "google",
+        "minutos_antes": 0
+      },
+      "aviso_en": "2026-11-03T18:30:00Z"
+    }
+  ]
+}

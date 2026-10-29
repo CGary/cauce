@@ -1,0 +1,53 @@
+{
+  "projection": "calendario_google.reuniones_proximas",
+  "params": {
+    "now": "2026-11-02T12:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "r1",
+        "serie_id": "s1",
+        "cuenta": "ana.personal@example.com",
+        "titulo": "Yoga",
+        "inicio": "2026-11-03T22:00:00Z",
+        "fin": "2026-11-03T23:00:00Z",
+        "todo_el_dia": false,
+        "recordatorio_min": 15,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    },
+    {
+      "id": "e2",
+      "type": "aviso_reunion_editado",
+      "v": 1,
+      "ts": "2026-11-01T21:00:00Z",
+      "payload": {
+        "serie_id": "s1",
+        "apagado": true
+      }
+    }
+  ],
+  "expected": [
+    {
+      "reunion_id": "r1",
+      "serie_id": "s1",
+      "cuenta": "ana.personal@example.com",
+      "titulo": "Yoga",
+      "inicio": "2026-11-03T22:00:00Z",
+      "fin": "2026-11-03T23:00:00Z",
+      "todo_el_dia": false,
+      "aviso": {
+        "origen": "cauce",
+        "apagado": true
+      },
+      "aviso_en": null
+    }
+  ]
+}

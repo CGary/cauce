@@ -1,0 +1,85 @@
+{
+  "projection": "calendario_google.reuniones_proximas",
+  "params": {
+    "now": "2026-11-02T12:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "d1",
+        "serie_id": "d1",
+        "cuenta": "ana.personal@example.com",
+        "titulo": "Cumpleaños de Luis",
+        "inicio": "2026-11-05T00:00:00Z",
+        "fin": "2026-11-06T00:00:00Z",
+        "todo_el_dia": true,
+        "recordatorio_min": 1440,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    },
+    {
+      "id": "e2",
+      "type": "reunion_sincronizada",
+      "v": 1,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "reunion_id": "d2",
+        "serie_id": "d2",
+        "cuenta": "ana.trabajo@example.com",
+        "titulo": "Feriado",
+        "inicio": "2026-11-06T00:00:00Z",
+        "fin": "2026-11-07T00:00:00Z",
+        "todo_el_dia": true,
+        "recordatorio_min": null,
+        "estado": "confirmada",
+        "respuesta": "aceptada"
+      }
+    },
+    {
+      "id": "e3",
+      "type": "aviso_reunion_editado",
+      "v": 1,
+      "ts": "2026-11-01T21:00:00Z",
+      "payload": {
+        "serie_id": "d2",
+        "hora": "07:00"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "reunion_id": "d1",
+      "serie_id": "d1",
+      "cuenta": "ana.personal@example.com",
+      "titulo": "Cumpleaños de Luis",
+      "inicio": "2026-11-05T00:00:00Z",
+      "fin": "2026-11-06T00:00:00Z",
+      "todo_el_dia": true,
+      "aviso": {
+        "origen": "defecto",
+        "hora": "08:00"
+      },
+      "aviso_en": "2026-11-05T12:00:00Z"
+    },
+    {
+      "reunion_id": "d2",
+      "serie_id": "d2",
+      "cuenta": "ana.trabajo@example.com",
+      "titulo": "Feriado",
+      "inicio": "2026-11-06T00:00:00Z",
+      "fin": "2026-11-07T00:00:00Z",
+      "todo_el_dia": true,
+      "aviso": {
+        "origen": "cauce",
+        "hora": "07:00"
+      },
+      "aviso_en": "2026-11-06T11:00:00Z"
+    }
+  ]
+}

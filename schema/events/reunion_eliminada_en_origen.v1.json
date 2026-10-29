@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/reunion_eliminada_en_origen.v1.json",
+  "title": "reunion_eliminada_en_origen",
+  "description": "La ocurrencia ya no está en el calendario del teléfono (borrada en Google o cuenta quitada). Deja de verse y de sonar; su registro no se borra. Feature dueño: calendario_google.",
+  "type": "object",
+  "required": ["reunion_id"],
+  "properties": {
+    "reunion_id": { "type": "string", "minLength": 1 }
+  }
+}

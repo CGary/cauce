@@ -84,6 +84,30 @@ describe('ActivasView (P1)', () => {
     expect(event?.payload.alarma_id).toMatch(UUID_V7)
   })
 
+  it('crear remedio propone cada 8 h y "por días" se convierte en count', async () => {
+    const pushed = capturePush()
+    renderApp('/alarmas/activas')
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva alarma' }))
+    await userEvent.type(screen.getByLabelText('Título'), 'Amoxicilina Juan')
+    await userEvent.selectOptions(screen.getByLabelText('Tipo'), 'remedio')
+    expect(screen.getByLabelText('Repetición')).toHaveValue('HOURLY')
+    expect(screen.getByRole('radio', { name: '8 h' })).toBeChecked()
+    await userEvent.click(screen.getByRole('radio', { name: '6 h' }))
+    await userEvent.selectOptions(screen.getByLabelText('Duración'), 'days')
+    await userEvent.type(screen.getByLabelText('Días'), '5')
+    expect(screen.getByText('20 tomas en total.')).toBeInTheDocument()
+    await userEvent.type(screen.getByLabelText('Destinatario'), 'Juan')
+    await userEvent.type(screen.getByLabelText('Remedio'), 'Amoxicilina')
+    await userEvent.click(screen.getByRole('button', { name: 'Crear' }))
+    await waitFor(() => expect(pushed()?.events).toHaveLength(1))
+    expect(pushed()?.events[0]?.payload).toMatchObject({
+      tipo: 'remedio',
+      hora: '08:00',
+      repeticion: { freq: 'HOURLY', interval: 6, count: 20 },
+    })
+  })
+
   it('crear mensual por ordinal empuja byday con ordinal', async () => {
     const pushed = capturePush()
     renderApp('/alarmas/activas')

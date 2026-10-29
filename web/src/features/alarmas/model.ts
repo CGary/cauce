@@ -26,7 +26,11 @@ export const V_ALARMA_DESACTIVADA = 1
 
 export type FreqForm = 'una_vez' | Freq
 export type MonthlyMode = 'bymonthday' | 'byday'
-export type LimitMode = 'none' | 'count' | 'until'
+/** `days` solo existe en HOURLY: se guarda como `count` ("cada 8 h por 5 días" = 15). */
+export type LimitMode = 'none' | 'count' | 'until' | 'days'
+
+/** Intervalos típicos de un remedio, en horas. */
+export const HOURLY_PRESETS = ['4', '6', '8', '12'] as const
 
 export interface AlarmaFormState {
   titulo: string
@@ -37,6 +41,7 @@ export interface AlarmaFormState {
   limit: LimitMode
   count: string
   until: string
+  dias: string
   weekdays: Weekday[]
   monthlyMode: MonthlyMode
   bymonthday: string
@@ -61,6 +66,7 @@ export function emptyForm(): AlarmaFormState {
     limit: 'none',
     count: '',
     until: '',
+    dias: '',
     weekdays: [],
     monthlyMode: 'bymonthday',
     bymonthday: '1',
@@ -97,7 +103,12 @@ export function activaToForm(
   if (!rep || !isFreq(rep.freq)) return form
   form.freq = rep.freq
   form.interval = rep.interval !== undefined ? String(rep.interval) : ''
-  if (rep.count !== undefined) {
+  const hours =
+    rep.count !== undefined && rep.freq === 'HOURLY' ? rep.count * (rep.interval ?? 1) : 0
+  if (rep.count !== undefined && hours > 0 && hours % 24 === 0) {
+    form.limit = 'days'
+    form.dias = String(hours / 24)
+  } else if (rep.count !== undefined) {
     form.limit = 'count'
     form.count = String(rep.count)
   } else if (rep.until) {
@@ -176,6 +187,9 @@ export function validateForm(form: AlarmaFormState): string | null {
   if (form.limit === 'count' && parsePositiveInt(form.count) === null) {
     return 'La cantidad tiene que ser un entero ≥ 1'
   }
+  if (form.limit === 'days' && form.freq === 'HOURLY' && parsePositiveInt(form.dias) === null) {
+    return 'Los días tienen que ser un entero ≥ 1'
+  }
   if (form.limit === 'until' && !isDate(form.until.trim()))
     return 'Hasta tiene que ser una fecha YYYY-MM-DD'
   if (form.freq === 'MONTHLY' && form.monthlyMode === 'bymonthday') {
@@ -192,6 +206,15 @@ export function validateForm(form: AlarmaFormState): string | null {
   return null
 }
 
+/** Disparos de un HOURLY que cubren `dias` días: 8 h × 5 días = 15. Redondea hacia arriba. */
+export function dosesForDays(dias: string, interval: string): number | null {
+  const days = parsePositiveInt(dias)
+  if (days === null) return null
+  const hours = interval.trim() === '' ? 1 : parsePositiveInt(interval)
+  if (hours === null) return null
+  return Math.ceil((days * 24) / hours)
+}
+
 function buildRepeticion(form: AlarmaFormState): Repeticion | null {
   if (form.freq === 'una_vez') return null
   const rep: Repeticion = { freq: form.freq }
@@ -201,6 +224,9 @@ function buildRepeticion(form: AlarmaFormState): Repeticion | null {
   }
   if (form.limit === 'count') {
     const count = parsePositiveInt(form.count)
+    if (count !== null) rep.count = count
+  } else if (form.limit === 'days' && form.freq === 'HOURLY') {
+    const count = dosesForDays(form.dias, form.interval)
     if (count !== null) rep.count = count
   } else if (form.limit === 'until') {
     rep.until = form.until.trim()

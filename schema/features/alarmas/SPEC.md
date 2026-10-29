@@ -184,6 +184,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) P3 filtra por `destinatario` antes de deduplicar.
 - (agente) En P3, los empates de `ts` se ordenan por `alarma_id` y luego por `programada_para`, ambos ascendentes.
 - (agente) Consola web de P1: pide solo `tz` (el endpoint inyecta `now`, igual que P2). El editor rellena destinatario y remedio desde P2, porque P1 no los trae. El `.ics` usa la fecha local de `proximo_disparo` como DTSTART (ocurrencia válida; P1 no trae el ts de creación). HOURLY cuyo COUNT no es divisible entre los VEVENTs reparte el resto en los primeros; sin count ni until, y si 24 no es divisible por interval, exporta 30 días desde ese ancla. `WKST` en un RRULE importado se ignora (Google lo emite; cauce usa WKST=MO).
+- (agente) Formulario web de alarma: al elegir tipo `remedio` sin repetición se propone `HOURLY` cada 8 h (editable). `HOURLY` ofrece cada 4/6/8/12 h u otro valor, y la duración «por días» es solo de UI: se guarda como `count = ⌈días × 24 / interval⌉` (cada 8 h por 5 días = 15). Al editar, un `HOURLY` cuyo `count × interval` cubre días enteros se muestra en días.
 - (agente) Una alarma pospuesta sigue sonando aunque ya se haya emitido su `alarma_desactivada(fin_tratamiento)`; solo una desactivación por usuario cancela la posposición.
 
 ## 9. Changelog

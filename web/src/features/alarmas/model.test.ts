@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   activaToForm,
   desactivadaPayload,
+  dosesForDays,
   emptyForm,
   exportBulk,
   formToPayload,
@@ -134,6 +135,35 @@ describe('formToPayload', () => {
         'a1',
       ).repeticion,
     ).toEqual({ freq: 'DAILY', until: '2026-12-31' })
+  })
+
+  it('"cada 8 h por 5 días" se guarda como count 15', () => {
+    expect(
+      formToPayload(
+        form({ titulo: 'Amoxicilina', freq: 'HOURLY', interval: '8', limit: 'days', dias: '5' }),
+        'a1',
+      ).repeticion,
+    ).toEqual({ freq: 'HOURLY', interval: 8, count: 15 })
+  })
+
+  it('por días redondea hacia arriba si el intervalo no divide al día', () => {
+    expect(dosesForDays('2', '5')).toBe(10)
+  })
+
+  it('editar un HOURLY cuyo count cubre días enteros lo muestra como días', () => {
+    const row: AlarmaActiva = {
+      alarma_id: 'h1',
+      titulo: 'Amoxicilina',
+      tipo: 'otro',
+      hora: '08:00',
+      repeticion: { freq: 'HOURLY', interval: 8, count: 15 },
+      proximo_disparo: '2026-11-02T12:00:00Z',
+    }
+    const state = activaToForm(row)
+    expect(state).toMatchObject({ limit: 'days', dias: '5', interval: '8' })
+    expect(formToPayload(state, 'h1').repeticion).toEqual(row.repeticion)
+    const odd = activaToForm({ ...row, repeticion: { freq: 'HOURLY', interval: 8, count: 4 } })
+    expect(odd).toMatchObject({ limit: 'count', count: '4' })
   })
 
   it('editar rellena el formulario desde P1 y P2 y vuelve a emitir el estado completo', () => {

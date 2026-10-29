@@ -2,7 +2,14 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Field, inputClass } from '../../../core/ui'
 import type { AlarmaFormState } from '../model'
 import type { AlarmaPayload } from '../types'
-import { WEEKDAY_LABEL, WEEKDAYS, formToPayload, validateForm } from '../model'
+import {
+  HOURLY_PRESETS,
+  WEEKDAY_LABEL,
+  WEEKDAYS,
+  dosesForDays,
+  formToPayload,
+  validateForm,
+} from '../model'
 
 type FieldKey =
   | 'titulo'
@@ -12,6 +19,7 @@ type FieldKey =
   | 'interval'
   | 'count'
   | 'until'
+  | 'dias'
   | 'bymonthday'
   | 'ordinal'
 
@@ -25,6 +33,7 @@ function fieldOf(message: string): FieldKey | null {
     ['El intervalo', 'interval'],
     ['La cantidad', 'count'],
     ['Hasta', 'until'],
+    ['Los días', 'dias'],
     ['El día del mes', 'bymonthday'],
     ['Elegí', 'ordinal'],
   ]
@@ -36,6 +45,21 @@ function Choice({ children }: { children: ReactNode }) {
 }
 
 const checkClass = 'size-5 flex-none accent-primary'
+
+/** Opción de un grupo segmentado: radio real (teclado y lector de pantalla), con aspecto de botón. */
+const segmentClass =
+  'flex min-h-11 min-w-14 cursor-pointer items-center justify-center rounded-control border border-line-strong bg-surface px-3 text-body font-medium tabular-nums text-ink has-checked:border-primary has-checked:bg-primary has-checked:text-on-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary'
+
+const INTERVAL_HINT: Record<'DAILY' | 'WEEKLY' | 'MONTHLY', string> = {
+  DAILY: 'Cada cuántos días. Vacío es 1.',
+  WEEKLY: 'Cada cuántas semanas. Vacío es 1.',
+  MONTHLY: 'Cada cuántos meses. Vacío es 1.',
+}
+
+function dosesHint(dias: string, interval: string): string | undefined {
+  const count = dosesForDays(dias, interval)
+  return count === null ? undefined : `${count} ${count === 1 ? 'toma' : 'tomas'} en total.`
+}
 
 export function AlarmaForm({
   mode,
@@ -53,6 +77,9 @@ export function AlarmaForm({
   onCancel: () => void
 }) {
   const [form, setForm] = useState(initial)
+  const [otherHours, setOtherHours] = useState(
+    initial.freq === 'HOURLY' && !(HOURLY_PRESETS as readonly string[]).includes(initial.interval),
+  )
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const set = <K extends keyof AlarmaFormState>(key: K, value: AlarmaFormState[K]) =>
@@ -101,7 +128,16 @@ export function AlarmaForm({
               {...c}
               className={inputClass}
               value={form.tipo}
-              onChange={(event) => set('tipo', event.target.value as AlarmaFormState['tipo'])}
+              onChange={(event) => {
+                const tipo = event.target.value as AlarmaFormState['tipo']
+                // Un remedio casi siempre es "cada N horas": se propone cada 8 h si aún no hay repetición.
+                if (tipo === 'remedio' && form.freq === 'una_vez') {
+                  setForm((prev) => ({ ...prev, tipo, freq: 'HOURLY', interval: '8' }))
+                  setOtherHours(false)
+                } else {
+                  set('tipo', tipo)
+                }
+              }}
             >
               <option value="remedio">Remedio</option>
               <option value="reunion">Reunión</option>
@@ -109,14 +145,18 @@ export function AlarmaForm({
             </select>
           )}
         </Field>
-        <Field label="Hora" hint="Formato 24 h, por ejemplo 08:00." error={errorFor('hora')}>
+        <Field
+          label="Hora"
+          hint={form.freq === 'HOURLY' ? 'La primera toma.' : undefined}
+          error={errorFor('hora')}
+        >
           {(c) => (
             <input
               {...c}
               className={inputClass}
+              type="time"
+              step={60}
               value={form.hora}
-              inputMode="numeric"
-              placeholder="08:00"
               onChange={(event) => set('hora', event.target.value)}
             />
           )}
@@ -127,37 +167,93 @@ export function AlarmaForm({
               {...c}
               className={inputClass}
               value={form.freq}
-              onChange={(event) => set('freq', event.target.value as AlarmaFormState['freq'])}
+              onChange={(event) => {
+                const freq = event.target.value as AlarmaFormState['freq']
+                setForm((prev) => ({
+                  ...prev,
+                  freq,
+                  limit: freq !== 'HOURLY' && prev.limit === 'days' ? 'none' : prev.limit,
+                }))
+              }}
             >
               <option value="una_vez">Una vez</option>
               <option value="DAILY">Diaria</option>
               <option value="WEEKLY">Semanal</option>
               <option value="MONTHLY">Mensual</option>
-              <option value="HOURLY">Cada hora</option>
+              <option value="HOURLY">Cada N horas</option>
             </select>
           )}
         </Field>
       </div>
+      {form.freq === 'HOURLY' && (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-1.5 text-caption font-medium">Cada</legend>
+          <div className="flex flex-wrap gap-2">
+            {HOURLY_PRESETS.map((hours) => (
+              <label key={hours} className={segmentClass}>
+                <input
+                  type="radio"
+                  name="hourly-interval"
+                  className="sr-only"
+                  checked={!otherHours && form.interval === hours}
+                  onChange={() => {
+                    setOtherHours(false)
+                    set('interval', hours)
+                  }}
+                />
+                {hours} h
+              </label>
+            ))}
+            <label className={segmentClass}>
+              <input
+                type="radio"
+                name="hourly-interval"
+                className="sr-only"
+                checked={otherHours}
+                onChange={() => setOtherHours(true)}
+              />
+              Otro
+            </label>
+          </div>
+          {otherHours && (
+            <Field label="Horas" error={errorFor('interval')} className="w-36">
+              {(c) => (
+                <input
+                  {...c}
+                  className={inputClass}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={form.interval}
+                  placeholder="1"
+                  onChange={(event) => set('interval', event.target.value)}
+                />
+              )}
+            </Field>
+          )}
+          {!otherHours && errorField === 'interval' && (
+            <p className="text-caption font-medium text-danger-ink">⚠ {error}</p>
+          )}
+        </fieldset>
+      )}
       {form.freq !== 'una_vez' && (
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field
-            label="Intervalo"
-            hint="Cada cuántas repeticiones. Vacío es 1."
-            error={errorFor('interval')}
-          >
-            {(c) => (
-              <input
-                {...c}
-                className={inputClass}
-                type="number"
-                min={1}
-                value={form.interval}
-                placeholder="1"
-                onChange={(event) => set('interval', event.target.value)}
-              />
-            )}
-          </Field>
-          <Field label="Límite">
+          {form.freq !== 'HOURLY' && (
+            <Field label="Intervalo" hint={INTERVAL_HINT[form.freq]} error={errorFor('interval')}>
+              {(c) => (
+                <input
+                  {...c}
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  value={form.interval}
+                  placeholder="1"
+                  onChange={(event) => set('interval', event.target.value)}
+                />
+              )}
+            </Field>
+          )}
+          <Field label={form.freq === 'HOURLY' ? 'Duración' : 'Límite'}>
             {(c) => (
               <select
                 {...c}
@@ -166,11 +262,30 @@ export function AlarmaForm({
                 onChange={(event) => set('limit', event.target.value as AlarmaFormState['limit'])}
               >
                 <option value="none">Sin fin</option>
-                <option value="count">Cantidad</option>
-                <option value="until">Hasta</option>
+                {form.freq === 'HOURLY' && <option value="days">Por días</option>}
+                <option value="count">
+                  {form.freq === 'HOURLY' ? 'Cantidad de tomas' : 'Cantidad'}
+                </option>
+                <option value="until">Hasta una fecha</option>
               </select>
             )}
           </Field>
+          {form.limit === 'days' && form.freq === 'HOURLY' && (
+            <Field label="Días" hint={dosesHint(form.dias, form.interval)} error={errorFor('dias')}>
+              {(c) => (
+                <input
+                  {...c}
+                  className={inputClass}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={form.dias}
+                  placeholder="5"
+                  onChange={(event) => set('dias', event.target.value)}
+                />
+              )}
+            </Field>
+          )}
           {form.limit === 'count' && (
             <Field label="Cantidad" error={errorFor('count')}>
               {(c) => (
@@ -186,13 +301,13 @@ export function AlarmaForm({
             </Field>
           )}
           {form.limit === 'until' && (
-            <Field label="Hasta" hint="Fecha AAAA-MM-DD." error={errorFor('until')}>
+            <Field label="Hasta" hint="Incluye ese día." error={errorFor('until')}>
               {(c) => (
                 <input
                   {...c}
                   className={inputClass}
+                  type="date"
                   value={form.until}
-                  placeholder="2026-12-31"
                   onChange={(event) => set('until', event.target.value)}
                 />
               )}

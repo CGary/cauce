@@ -134,14 +134,12 @@ curl -sS 'http://localhost:8080/sync/pull?since=0'
 
 ## Conformance
 
-`go test ./...` walks `../schema/features/*/fixtures/*/*.json`. Fixtures of a
-feature without registered projections are schema-validated only and reported as
-pending `/feature <id>` (in phase 2 no feature is wired, so the alarmas fixtures
-are schema-validated only). Once a feature registers its projections in
-`cmd/cauce/main.go` and in the test registry, every fixture of that feature must
-execute its projection and match `expected` structurally (key order ignored,
-arrays ordered, numbers within 1e-9); an unknown projection fails with `unknown
-projection ...`.
+`go test ./...` walks `../schema/features/*/fixtures/*/*.json`. Every fixture
+must execute its projection and match `expected` structurally (key order
+ignored, arrays ordered, numbers within 1e-9). The runner is strict, like the
+Kotlin one: a fixture whose projection is not registered fails with `unknown
+projection ...` until `/feature <id>` registers it in `cmd/cauce/main.go` and in
+the test registry; there is no skip.
 
 ## Tests
 

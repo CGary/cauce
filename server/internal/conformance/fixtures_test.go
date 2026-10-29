@@ -10,10 +10,10 @@ import (
 	"cauce/server/internal/core/projection"
 )
 
-// TestContractFixtures validates every repository fixture against the embedded
-// schemas and runs the projections that are registered. Feature projections are
-// added by /feature <id>; until then their fixtures still guard the contract,
-// and the skip is reported per feature instead of silently passing.
+// TestContractFixtures runs every repository fixture through its projection and
+// compares the result with expected. It is strict, like the Kotlin runner: a
+// fixture whose projection is not registered fails with "unknown projection"
+// until /feature <id> registers it. There is no per-feature skip.
 func TestContractFixtures(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "schema", "features")
 	validator, err := event.NewValidator()
@@ -35,15 +35,6 @@ func TestContractFixtures(t *testing.T) {
 	for feature, files := range cases {
 		feature, files := feature, files
 		t.Run(feature, func(t *testing.T) {
-			if !registry.HasFeature(feature) {
-				for _, path := range files {
-					if err := conformance.ValidateFile(path, validator); err != nil {
-						t.Errorf("%s: %v", path, err)
-					}
-				}
-				t.Logf("%d fixture(s) match the contract; projections pending /feature %s", len(files), feature)
-				return
-			}
 			for _, path := range files {
 				if err := conformance.RunFile(path, registry, validator); err != nil {
 					t.Errorf("%s: %v", path, err)

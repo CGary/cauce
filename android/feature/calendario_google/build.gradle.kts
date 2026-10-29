@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
 
@@ -21,6 +22,10 @@ android {
         jvmTarget = "17"
     }
 
+    buildFeatures {
+        compose = true
+    }
+
     // src/domain/kotlin holds the pure projection code: no Android imports, so
     // :feature:calendario_google:test runs on the JVM.
     sourceSets.getByName("main").java.srcDir("src/domain/kotlin")
@@ -32,6 +37,18 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     implementation(project(":core:events"))
+    implementation(project(":core:ui"))
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.junit)

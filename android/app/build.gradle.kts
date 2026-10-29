@@ -50,6 +50,7 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":core:sync"))
     implementation(project(":feature:alarmas"))
+    implementation(project(":feature:calendario_google"))
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- No permissions yet: READ_CALENDAR arrives with the calendar reader (SPEC section 5). -->
+
+    <!-- SPEC §5: read-only access to every account's calendar (2.1). Asked at runtime from the list. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
 </manifest>

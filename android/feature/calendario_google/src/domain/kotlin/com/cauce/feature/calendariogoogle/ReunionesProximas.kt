@@ -118,7 +118,7 @@ private inline fun <reified T> Envelope.decode(): T =
     CauceJson.wire.decodeFromJsonElement<T>(payload)
 
 /** Last event by `ts` per `reunion_id`; ties go to the later one in the input. Null = eliminada. */
-private fun foldReuniones(events: List<Envelope>): List<ReunionSincronizada> {
+internal fun foldReuniones(events: List<Envelope>): List<ReunionSincronizada> {
     val byId = linkedMapOf<String, ReunionSincronizada?>()
     events.withIndex()
         .filter { it.value.type == "reunion_sincronizada" || it.value.type == "reunion_eliminada_en_origen" }

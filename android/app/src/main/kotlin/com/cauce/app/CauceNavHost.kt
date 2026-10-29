@@ -8,6 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import com.cauce.core.ui.ListRow
 import com.cauce.core.ui.Screen
 import com.cauce.feature.alarmas.AlarmasRoutes
+import com.cauce.feature.calendariogoogle.CalendarioGoogleRoutes
 
 /**
  * One `NavHost`; every feature contributes its own graph through [FeatureModule.navGraph]. The
@@ -21,6 +22,10 @@ fun CauceNavHost(navController: NavHostController = rememberNavController()) {
                 ListRow(
                     title = "Alarmas",
                     onClick = { navController.navigate(AlarmasRoutes.LIST) },
+                )
+                ListRow(
+                    title = "Reuniones",
+                    onClick = { navController.navigate(CalendarioGoogleRoutes.LIST) },
                 )
             }
         }

@@ -104,6 +104,11 @@ Convenciones: todo `datetime` es RFC 3339 en UTC (`...Z`). La zona local entra c
 - Una cuenta quitada del teléfono no tiene evento propio: sus reuniones se registran como `reunion_eliminada_en_origen` una por una (2.8).
 - "Eliminar" aquí es dejar de ver: no hay borrado. Para dejar de ver una reunión concreta se apaga su aviso; para dejar de ver un calendario entero se oculta en Android.
 - (agente) En el servidor, un aviso editado se aplica tal como está escrito aunque no case con el tipo de reunión: `hora` en una reunión con hora usa esa hora local del día local de `inicio`, y `minutos_antes` en una de todo el día resta esos minutos a la medianoche UTC de `inicio`; igual que en `alarmas`.
+- (agente) `reunion_id` = `<id del evento raíz>:<inicio original en ms>`; `serie_id` = id del evento raíz de Android. Para una excepción de una serie repetida el evento raíz es `ORIGINAL_ID` y el inicio original es `ORIGINAL_INSTANCE_TIME`, así la excepción conserva su id aunque cambie de hora.
+- (agente) Una lectura vacía o fallida (sin permiso, proveedor no disponible) no emite nada, ni siquiera eliminaciones; por eso si se borran todas las reuniones de la ventana a la vez, las eliminaciones salen cuando vuelva a haber al menos una ocurrencia leída.
+- (agente) `reunion_eliminada_en_origen` solo para ocurrencias previas con `inicio` futuro dentro de los 14 días que ya no están; las que simplemente pasaron al pasado no se eliminan.
+- (agente) La edición del aviso en Android ofrece "minutos antes" para reuniones con hora y "a una hora" para las de todo el día, más "apagado" en ambas.
+- (agente) Mi respuesta se lee de `SELF_ATTENDEE_STATUS` del proveedor (derivada de mi asistente en `Attendees`); `ATTENDEE_RELATIONSHIP` no tiene un valor "yo" en Android.
 
 ## 9. Changelog
 

@@ -10,11 +10,17 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 
 @Serializable
 internal data class AlarmaActiva(
@@ -52,28 +58,27 @@ internal object AlarmasActivas : Projection<List<AlarmaActiva>> {
         "alarma_creada",
         "alarma_modificada",
         "alarma_desactivada",
+        "reunion_sincronizada",
+        "reunion_eliminada_en_origen",
+        "aviso_reunion_editado",
     )
     override val serializer: KSerializer<List<AlarmaActiva>> = ListSerializer(AlarmaActiva.serializer())
 
     override fun compute(events: List<Envelope>, params: JsonObject): List<AlarmaActiva> {
         val now = params.instant("now")
         val zone = params.zone()
-        return foldAlarms(events)
+        val own = foldAlarms(events)
             .filter { !it.deactivated }
             .mapNotNull { alarm ->
-                val next = occurrences(alarm.createdAt, alarm.hora, alarm.rule, zone)
+                val next = occurrences(alarm.createdAt, alarm.hora, alarm.rule, zone, alarm.fecha)
                     .firstOrNull { it.isAfter(now) }
                     ?: return@mapNotNull null
                 val restantes = if (alarm.rule?.count != null) {
-                    occurrences(alarm.createdAt, alarm.hora, alarm.rule, zone)
+                    occurrences(alarm.createdAt, alarm.hora, alarm.rule, zone, alarm.fecha)
                         .count { firing -> !firing.isBefore(next) }
                 } else {
                     null
                 }
-                Triple(next, alarm, restantes)
-            }
-            .sortedWith(compareBy({ it.first }, { it.second.id }))
-            .map { (next, alarm, restantes) ->
                 AlarmaActiva(
                     alarmaId = alarm.id,
                     titulo = alarm.titulo,
@@ -84,6 +89,8 @@ internal object AlarmasActivas : Projection<List<AlarmaActiva>> {
                     restantes = restantes,
                 )
             }
+        return (own + googleAlarmas(events, now, zone))
+            .sortedWith(compareBy({ Instant.parse(it.proximoDisparo) }, { it.alarmaId }))
     }
 }
 
@@ -119,7 +126,7 @@ internal object AdherenciaTratamiento : Projection<List<Adherencia>> {
                     alarmaId = alarm.id,
                     destinatario = alarm.destinatario.orEmpty(),
                     remedio = alarm.remedio.orEmpty(),
-                    dosisEsperadas = occurrences(alarm.createdAt, alarm.hora, alarm.rule, zone)
+                    dosisEsperadas = occurrences(alarm.createdAt, alarm.hora, alarm.rule, zone, alarm.fecha)
                         .takeWhile { !it.isAfter(now) }
                         .count(),
                     dosisDadas = givenSlots.size,
@@ -174,6 +181,7 @@ internal data class Alarm(
     val rule: Recurrence?,
     val destinatario: String?,
     val remedio: String?,
+    val fecha: LocalDate?,
     val deactivated: Boolean,
 )
 
@@ -192,6 +200,7 @@ private data class AlarmFields(
     val rule: Recurrence?,
     val destinatario: String?,
     val remedio: String?,
+    val fecha: LocalDate?,
 )
 
 internal fun foldAlarms(events: List<Envelope>): List<Alarm> {
@@ -201,8 +210,8 @@ internal fun foldAlarms(events: List<Envelope>): List<Alarm> {
         .sortedWith(compareBy({ Instant.parse(it.value.ts) }, { it.index }))
         .forEach { (_, event) ->
             when (event.type) {
-                "alarma_creada" -> if (event.v == 2) applyState(byId, event, isCreate = true)
-                "alarma_modificada" -> if (event.v == 2) applyState(byId, event, isCreate = false)
+                "alarma_creada" -> if (event.v in 2..3) applyState(byId, event, isCreate = true)
+                "alarma_modificada" -> if (event.v in 2..3) applyState(byId, event, isCreate = false)
                 "alarma_desactivada" -> deactivated += event.payload.string("alarma_id")
             }
         }
@@ -219,6 +228,7 @@ internal fun foldAlarms(events: List<Envelope>): List<Alarm> {
             rule = fields.rule,
             destinatario = fields.destinatario,
             remedio = fields.remedio,
+            fecha = fields.fecha,
             deactivated = id in deactivated,
         )
     }
@@ -258,12 +268,169 @@ private fun readFields(payload: JsonObject): AlarmFields {
         rule = parseRecurrence(repeticion),
         destinatario = payload.stringOrNull("destinatario"),
         remedio = payload.stringOrNull("remedio"),
+        fecha = payload.stringOrNull("fecha")?.let(LocalDate::parse),
     )
+}
+
+@Serializable
+internal data class AvisoReunion(
+    val origen: String,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("minutos_antes")
+    val minutosAntes: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val hora: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val apagado: Boolean? = null,
+)
+
+internal fun googleAlarmas(events: List<Envelope>, now: Instant, zone: ZoneId): List<AlarmaActiva> {
+    val avisos = foldAvisos(events)
+    return foldReuniones(events).mapNotNull { reunion ->
+        if (reunion.estado != "confirmada" || reunion.respuesta == "rechazada") return@mapNotNull null
+        val (aviso, at) = resolveAviso(reunion, avisos[reunion.serieId], zone)
+        if (aviso.apagado == true || at == null || !at.isAfter(now)) return@mapNotNull null
+        AlarmaActiva(
+            alarmaId = "gcal:${reunion.reunionId}",
+            titulo = reunion.titulo,
+            tipo = "reunion",
+            hora = formatLocalHora(at, zone),
+            repeticion = JsonNull,
+            proximoDisparo = formatUtc(at),
+        )
+    }
+}
+
+private data class LiveReunion(
+    val reunionId: String,
+    val serieId: String,
+    val cuenta: String,
+    val titulo: String,
+    val inicio: String,
+    val fin: String,
+    val inicioAt: Instant,
+    val todoElDia: Boolean,
+    val recordatorioMin: Int?,
+    val estado: String,
+    val respuesta: String,
+)
+
+private data class AvisoEdit(
+    val minutosAntes: Int?,
+    val hora: String?,
+    val apagado: Boolean,
+)
+
+private fun foldReuniones(events: List<Envelope>): List<LiveReunion> {
+    val byId = linkedMapOf<String, Pair<Instant, LiveReunion?>>()
+    events.withIndex()
+        .sortedWith(compareBy({ Instant.parse(it.value.ts) }, { it.index }))
+        .forEach { (_, event) ->
+            when (event.type) {
+                "reunion_sincronizada" -> {
+                    val id = event.payload.string("reunion_id")
+                    val ts = Instant.parse(event.ts)
+                    val current = byId[id]
+                    if (current == null || !ts.isBefore(current.first)) {
+                        byId[id] = ts to readReunion(event)
+                    }
+                }
+                "reunion_eliminada_en_origen" -> {
+                    val id = event.payload.string("reunion_id")
+                    val ts = Instant.parse(event.ts)
+                    val current = byId[id]
+                    if (current == null || !ts.isBefore(current.first)) {
+                        byId[id] = ts to null
+                    }
+                }
+            }
+        }
+    return byId.values.mapNotNull { it.second }
+}
+
+private fun foldAvisos(events: List<Envelope>): Map<String, AvisoEdit> {
+    val bySerie = linkedMapOf<String, Pair<Instant, AvisoEdit>>()
+    events.withIndex()
+        .sortedWith(compareBy({ Instant.parse(it.value.ts) }, { it.index }))
+        .forEach { (_, event) ->
+            if (event.type != "aviso_reunion_editado") return@forEach
+            val id = event.payload.string("serie_id")
+            val ts = Instant.parse(event.ts)
+            val current = bySerie[id]
+            if (current == null || !ts.isBefore(current.first)) {
+                bySerie[id] = ts to readAviso(event.payload)
+            }
+        }
+    return bySerie.mapValues { it.value.second }
+}
+
+private fun readReunion(event: Envelope): LiveReunion {
+    val payload = event.payload
+    val inicio = payload.string("inicio")
+    return LiveReunion(
+        reunionId = payload.string("reunion_id"),
+        serieId = payload.string("serie_id"),
+        cuenta = payload.string("cuenta"),
+        titulo = payload.string("titulo"),
+        inicio = inicio,
+        fin = payload.string("fin"),
+        inicioAt = Instant.parse(inicio),
+        todoElDia = payload.bool("todo_el_dia"),
+        recordatorioMin = payload.intOrNull("recordatorio_min"),
+        estado = payload.string("estado"),
+        respuesta = payload.string("respuesta"),
+    )
+}
+
+private fun readAviso(payload: JsonObject) = AvisoEdit(
+    minutosAntes = payload.intOrNull("minutos_antes"),
+    hora = payload.stringOrNull("hora"),
+    apagado = payload.boolOrNull("apagado") == true,
+)
+
+private fun meetingDay(reunion: LiveReunion, zone: ZoneId): LocalDate =
+    if (reunion.todoElDia) {
+        reunion.inicioAt.atZone(ZoneOffset.UTC).toLocalDate()
+    } else {
+        reunion.inicioAt.atZone(zone).toLocalDate()
+    }
+
+private fun resolveAviso(
+    reunion: LiveReunion,
+    edit: AvisoEdit?,
+    zone: ZoneId,
+): Pair<AvisoReunion, Instant?> {
+    if (edit?.apagado == true) return AvisoReunion(origen = "cauce", apagado = true) to null
+    edit?.minutosAntes?.let { minutes ->
+        return AvisoReunion(origen = "cauce", minutosAntes = minutes) to
+            reunion.inicioAt.minus(minutes.toLong(), ChronoUnit.MINUTES)
+    }
+    edit?.hora?.let { hora ->
+        val at = atHora(meetingDay(reunion, zone), LocalTime.parse(hora), zone)
+        return AvisoReunion(origen = "cauce", hora = hora) to at
+    }
+    if (reunion.todoElDia) {
+        val hora = "08:00"
+        val at = atHora(meetingDay(reunion, zone), LocalTime.parse(hora), zone)
+        return AvisoReunion(origen = "defecto", hora = hora) to at
+    }
+    reunion.recordatorioMin?.let { minutes ->
+        return AvisoReunion(origen = "google", minutosAntes = minutes) to
+            reunion.inicioAt.minus(minutes.toLong(), ChronoUnit.MINUTES)
+    }
+    return AvisoReunion(origen = "defecto", minutosAntes = 10) to
+        reunion.inicioAt.minus(10, ChronoUnit.MINUTES)
 }
 
 private fun JsonObject.string(key: String): String = getValue(key).jsonPrimitive.content
 
 private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+
+private fun JsonObject.intOrNull(key: String): Int? = this[key]?.jsonPrimitive?.intOrNull
+
+private fun JsonObject.bool(key: String): Boolean = getValue(key).jsonPrimitive.boolean
+
+private fun JsonObject.boolOrNull(key: String): Boolean? = this[key]?.jsonPrimitive?.booleanOrNull
 
 private fun JsonObject.instant(key: String): Instant = Instant.parse(string(key))
 

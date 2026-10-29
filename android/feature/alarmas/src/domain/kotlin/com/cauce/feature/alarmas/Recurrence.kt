@@ -39,6 +39,9 @@ private val BYDAY = Regex("""^(-1|[1-5])?(MO|TU|WE|TH|FR|SA|SU)$""")
 
 internal fun formatUtc(instant: Instant): String = UTC_FORMAT.format(instant)
 
+internal fun formatLocalHora(instant: Instant, zone: ZoneId): String =
+    instant.atZone(zone).format(DateTimeFormatter.ofPattern("HH:mm"))
+
 internal fun parseRecurrence(element: JsonElement): Recurrence? {
     if (element is JsonNull || element !is JsonObject) return null
     val freq = Freq.valueOf(element.getValue("freq").jsonPrimitive.content)
@@ -67,100 +70,123 @@ internal fun occurrences(
     hora: LocalTime,
     rule: Recurrence?,
     zone: ZoneId,
+    fecha: LocalDate? = null,
 ): Sequence<Instant> {
+    val inclusive = fecha != null
+    val anchor = if (fecha != null) atHora(fecha, hora, zone) else createdAt
     if (rule == null) {
-        return sequenceOf(firstHoraAfter(createdAt, hora, zone))
+        return sequenceOf(firstHora(anchor, hora, zone, inclusive))
     }
     require(rule.interval >= 1)
     return when (rule.freq) {
-        Freq.DAILY -> daily(createdAt, hora, rule, zone)
-        Freq.WEEKLY -> weekly(createdAt, hora, rule, zone)
-        Freq.MONTHLY -> monthly(createdAt, hora, rule, zone)
-        Freq.HOURLY -> hourly(createdAt, hora, rule, zone)
+        Freq.DAILY -> daily(anchor, hora, rule, zone, inclusive)
+        Freq.WEEKLY -> weekly(anchor, hora, rule, zone, inclusive)
+        Freq.MONTHLY -> monthly(anchor, hora, rule, zone, inclusive)
+        Freq.HOURLY -> hourly(anchor, hora, rule, zone, inclusive)
     }
 }
 
-private fun daily(createdAt: Instant, hora: LocalTime, rule: Recurrence, zone: ZoneId): Sequence<Instant> =
-    sequence {
-        val firstDate = firstHoraAfter(createdAt, hora, zone).atZone(zone).toLocalDate()
-        var index = 0L
-        var emitted = 0
-        while (index < MAX_STEPS && !done(rule, emitted)) {
-            val date = firstDate.plusDays(index * rule.interval)
-            if (pastUntil(date, rule)) break
-            yield(atHora(date, hora, zone))
-            emitted++
-            index++
-        }
+private fun daily(
+    anchor: Instant,
+    hora: LocalTime,
+    rule: Recurrence,
+    zone: ZoneId,
+    inclusive: Boolean,
+): Sequence<Instant> = sequence {
+    val firstDate = firstHora(anchor, hora, zone, inclusive).atZone(zone).toLocalDate()
+    var index = 0L
+    var emitted = 0
+    while (index < MAX_STEPS && !done(rule, emitted)) {
+        val date = firstDate.plusDays(index * rule.interval)
+        if (pastUntil(date, rule)) break
+        yield(atHora(date, hora, zone))
+        emitted++
+        index++
     }
+}
 
-private fun hourly(createdAt: Instant, hora: LocalTime, rule: Recurrence, zone: ZoneId): Sequence<Instant> =
-    sequence {
-        val first = firstHoraAfter(createdAt, hora, zone)
-        var index = 0L
-        var emitted = 0
-        while (index < MAX_STEPS && !done(rule, emitted)) {
-            val instant = first.plus(index * rule.interval, ChronoUnit.HOURS)
-            if (pastUntil(instant.atZone(zone).toLocalDate(), rule)) break
-            yield(instant)
-            emitted++
-            index++
-        }
+private fun hourly(
+    anchor: Instant,
+    hora: LocalTime,
+    rule: Recurrence,
+    zone: ZoneId,
+    inclusive: Boolean,
+): Sequence<Instant> = sequence {
+    val first = firstHora(anchor, hora, zone, inclusive)
+    var index = 0L
+    var emitted = 0
+    while (index < MAX_STEPS && !done(rule, emitted)) {
+        val instant = first.plus(index * rule.interval, ChronoUnit.HOURS)
+        if (pastUntil(instant.atZone(zone).toLocalDate(), rule)) break
+        yield(instant)
+        emitted++
+        index++
     }
+}
 
-private fun weekly(createdAt: Instant, hora: LocalTime, rule: Recurrence, zone: ZoneId): Sequence<Instant> =
-    sequence {
-        val derived = rule.weekdays.ifEmpty {
-            setOf(firstHoraAfter(createdAt, hora, zone).atZone(zone).dayOfWeek)
-        }
-        val firstDate = firstMatchingDate(createdAt, hora, derived, zone) ?: return@sequence
-        val anchorMonday = firstDate.with(DayOfWeek.MONDAY)
-        var date = firstDate
-        var emitted = 0
-        var steps = 0
-        while (steps < MAX_STEPS && !done(rule, emitted)) {
-            if (pastUntil(date, rule)) break
-            if (date.dayOfWeek in derived) {
-                val weeks = ChronoUnit.WEEKS.between(anchorMonday, date.with(DayOfWeek.MONDAY))
-                if (weeks % rule.interval == 0L) {
-                    val instant = atHora(date, hora, zone)
-                    if (instant.isAfter(createdAt)) {
-                        yield(instant)
-                        emitted++
-                    }
+private fun weekly(
+    anchor: Instant,
+    hora: LocalTime,
+    rule: Recurrence,
+    zone: ZoneId,
+    inclusive: Boolean,
+): Sequence<Instant> = sequence {
+    val derived = rule.weekdays.ifEmpty {
+        setOf(firstHora(anchor, hora, zone, inclusive).atZone(zone).dayOfWeek)
+    }
+    val firstDate = firstMatchingDate(anchor, hora, derived, zone, inclusive) ?: return@sequence
+    val anchorMonday = firstDate.with(DayOfWeek.MONDAY)
+    var date = firstDate
+    var emitted = 0
+    var steps = 0
+    while (steps < MAX_STEPS && !done(rule, emitted)) {
+        if (pastUntil(date, rule)) break
+        if (date.dayOfWeek in derived) {
+            val weeks = ChronoUnit.WEEKS.between(anchorMonday, date.with(DayOfWeek.MONDAY))
+            if (weeks % rule.interval == 0L) {
+                val instant = atHora(date, hora, zone)
+                if (isAfterAnchor(instant, anchor, inclusive)) {
+                    yield(instant)
+                    emitted++
                 }
             }
-            date = date.plusDays(1)
-            steps++
         }
+        date = date.plusDays(1)
+        steps++
     }
+}
 
-private fun monthly(createdAt: Instant, hora: LocalTime, rule: Recurrence, zone: ZoneId): Sequence<Instant> =
-    sequence {
-        var month = YearMonth.from(createdAt.atZone(zone))
-        var origin: YearMonth? = null
-        var guard = 0
-        while (origin == null && guard < 2_400) {
-            val occ = occurrenceIn(month, hora, rule, zone)
-            if (occ != null && occ.isAfter(createdAt)) origin = month else month = month.plusMonths(1)
-            guard++
-        }
-        val anchorMonth = origin ?: return@sequence
-        var step = 0L
-        var emitted = 0
-        while (step < 2_400 && !done(rule, emitted)) {
-            val candidate = anchorMonth.plusMonths(step * rule.interval)
-            if (rule.until != null && candidate.atDay(1).isAfter(rule.until)) break
-            val occ = occurrenceIn(candidate, hora, rule, zone)
-            if (occ != null) {
-                val date = occ.atZone(zone).toLocalDate()
-                if (pastUntil(date, rule)) break
-                yield(occ)
-                emitted++
-            }
-            step++
-        }
+private fun monthly(
+    anchor: Instant,
+    hora: LocalTime,
+    rule: Recurrence,
+    zone: ZoneId,
+    inclusive: Boolean,
+): Sequence<Instant> = sequence {
+    var month = YearMonth.from(anchor.atZone(zone))
+    var origin: YearMonth? = null
+    var guard = 0
+    while (origin == null && guard < 2_400) {
+        val occ = occurrenceIn(month, hora, rule, zone)
+        if (occ != null && isAfterAnchor(occ, anchor, inclusive)) origin = month else month = month.plusMonths(1)
+        guard++
     }
+    val anchorMonth = origin ?: return@sequence
+    var step = 0L
+    var emitted = 0
+    while (step < 2_400 && !done(rule, emitted)) {
+        val candidate = anchorMonth.plusMonths(step * rule.interval)
+        if (rule.until != null && candidate.atDay(1).isAfter(rule.until)) break
+        val occ = occurrenceIn(candidate, hora, rule, zone)
+        if (occ != null) {
+            val date = occ.atZone(zone).toLocalDate()
+            if (pastUntil(date, rule)) break
+            yield(occ)
+            emitted++
+        }
+        step++
+    }
+}
 
 private fun occurrenceIn(month: YearMonth, hora: LocalTime, rule: Recurrence, zone: ZoneId): Instant? {
     val date = when {
@@ -191,10 +217,14 @@ private fun nthWeekday(month: YearMonth, ordinal: Int, weekday: DayOfWeek): Loca
     return date.takeIf { YearMonth.from(it) == month }
 }
 
-private fun firstHoraAfter(anchor: Instant, hora: LocalTime, zone: ZoneId): Instant {
+private fun firstHora(anchor: Instant, hora: LocalTime, zone: ZoneId, inclusive: Boolean): Instant {
     val localDate = anchor.atZone(zone).toLocalDate()
     val sameDay = atHora(localDate, hora, zone)
-    return if (sameDay.isAfter(anchor)) sameDay else atHora(localDate.plusDays(1), hora, zone)
+    return if (isAfterAnchor(sameDay, anchor, inclusive)) {
+        sameDay
+    } else {
+        atHora(localDate.plusDays(1), hora, zone)
+    }
 }
 
 private fun firstMatchingDate(
@@ -202,16 +232,20 @@ private fun firstMatchingDate(
     hora: LocalTime,
     days: Set<DayOfWeek>,
     zone: ZoneId,
+    inclusive: Boolean,
 ): LocalDate? {
     var date = anchor.atZone(zone).toLocalDate()
     repeat(14) {
-        if (date.dayOfWeek in days && atHora(date, hora, zone).isAfter(anchor)) return date
+        if (date.dayOfWeek in days && isAfterAnchor(atHora(date, hora, zone), anchor, inclusive)) return date
         date = date.plusDays(1)
     }
     return null
 }
 
-private fun atHora(date: LocalDate, hora: LocalTime, zone: ZoneId): Instant =
+private fun isAfterAnchor(instant: Instant, anchor: Instant, inclusive: Boolean): Boolean =
+    if (inclusive) !instant.isBefore(anchor) else instant.isAfter(anchor)
+
+internal fun atHora(date: LocalDate, hora: LocalTime, zone: ZoneId): Instant =
     ZonedDateTime.of(date, hora, zone).toInstant()
 
 private fun done(rule: Recurrence, emitted: Int): Boolean = rule.count != null && emitted >= rule.count

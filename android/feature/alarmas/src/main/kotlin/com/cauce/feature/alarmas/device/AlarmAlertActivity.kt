@@ -1,6 +1,5 @@
 package com.cauce.feature.alarmas.device
 
-import android.app.KeyguardManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -67,7 +66,6 @@ class AlarmAlertActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            getSystemService(KeyguardManager::class.java)?.requestDismissKeyguard(this, null)
         }
     }
 }

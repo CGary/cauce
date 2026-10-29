@@ -53,7 +53,11 @@ internal object AlarmActions {
         }
         services.eventStore.append(outbox)
 
-        AlarmNotifications.post(context, alarm, programadaPara)
+        val notification = AlarmNotifications.build(context, alarm, programadaPara)
+        val ringing = AlarmRingingService.start(
+            context, alarmaId, programadaPara, AlarmNotifications.notificationId(alarmaId), notification,
+        )
+        if (!ringing) AlarmNotifications.post(context, alarm, programadaPara)
         AlarmScheduler(context).scheduleTimeout(alarmaId, programadaPara, now.plus(2, ChronoUnit.MINUTES))
         AlarmasRuntime.rescheduleNow(context)
     }
@@ -82,6 +86,7 @@ internal object AlarmActions {
         services.eventStore.append(outbox)
 
         AlarmScheduler(context).cancelTimeout(alarmaId)
+        AlarmRingingService.close(context, alarmaId, programadaPara)
         AlarmNotifications.cancel(context, alarmaId)
         AlarmasRuntime.rescheduleNow(context)
     }
@@ -113,6 +118,7 @@ internal object AlarmActions {
             }
         }
         AlarmScheduler(context).cancelTimeout(alarmaId)
+        AlarmRingingService.close(context, alarmaId, programadaPara)
         AlarmNotifications.cancel(context, alarmaId)
     }
 
@@ -130,6 +136,7 @@ internal object AlarmActions {
                 ),
             )
         }
+        AlarmRingingService.close(context, alarmaId, programadaPara)
         AlarmNotifications.cancel(context, alarmaId)
     }
 }

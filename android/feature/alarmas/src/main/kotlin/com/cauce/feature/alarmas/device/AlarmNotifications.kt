@@ -6,8 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.RingtoneManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.cauce.feature.alarmas.Alarm
@@ -15,26 +13,23 @@ import com.cauce.feature.alarmas.R
 
 /**
  * The ringing alarm notification (SPEC 2.3): high priority, alarm category, full-screen intent
- * over the lock screen, `FLAG_INSISTENT` so sound+vibration loop until attended, and the two
- * actions — Hecho and Posponer 10 min.
+ * over the lock screen and the two actions — Hecho and Posponer 10 min. It has no sound of its
+ * own: [AlarmRingingService] plays the alarm (`USAGE_ALARM`) and this is its foreground notification.
  */
 internal object AlarmNotifications {
     /**
-     * Channels are immutable once created, so the alarm-sound + vibration fix needs a new id
-     * (SPEC 2.3: the alarm rings *and* vibrates). The old channel is deleted, never reused.
+     * Channels are immutable once created, so silencing the channel needs a new id: the service
+     * plays the sound, the channel must not (SPEC 2.3). Old channels are deleted, never reused.
      */
-    private const val CHANNEL_ID = "alarmas_disparos_v2"
+    private const val CHANNEL_ID = "alarmas_disparos_v3"
+    private const val PREVIOUS_CHANNEL_ID = "alarmas_disparos_v2"
     private const val LEGACY_CHANNEL_ID = "alarmas_disparos"
-    private val VIBRATION_PATTERN = longArrayOf(0, 500, 500)
 
     fun ensureChannel(context: Context) {
         val manager = NotificationManagerCompat.from(context)
         manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+        manager.deleteNotificationChannel(PREVIOUS_CHANNEL_ID)
 
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Alarmas",
@@ -42,15 +37,23 @@ internal object AlarmNotifications {
         ).apply {
             description = "Disparos de alarmas: remedios, reuniones y otras"
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-            enableVibration(true)
-            vibrationPattern = VIBRATION_PATTERN
-            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?.let { setSound(it, audioAttributes) }
+            enableVibration(false)
+            setSound(null, null)
         }
         manager.createNotificationChannel(channel)
     }
 
+    /** Posts the notification directly (fallback when the ringing service cannot start). */
     fun post(context: Context, alarm: Alarm, programadaPara: String) {
+        val notification = build(context, alarm, programadaPara)
+        if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            NotificationManagerCompat.from(context).notify(notificationId(alarm.id), notification)
+        }
+    }
+
+    fun notificationId(alarmaId: String): Int = alarmaId.hashCode()
+
+    fun build(context: Context, alarm: Alarm, programadaPara: String): Notification {
         ensureChannel(context)
         val text = when {
             alarm.tipo == "remedio" ->
@@ -66,7 +69,7 @@ internal object AlarmNotifications {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setSilent(true)
             .setContentIntent(openAppIntent(context))
             .setFullScreenIntent(alertActivityIntent(context, alarm.id, programadaPara), true)
             .addAction(0, "Hecho", actionIntent(context, AlarmReceiver.ACTION_HECHO, alarm.id, programadaPara))
@@ -76,16 +79,15 @@ internal object AlarmNotifications {
                 actionIntent(context, AlarmReceiver.ACTION_POSPONER, alarm.id, programadaPara),
             )
             .build()
-        // Ring and vibrate until the notification leaves the shade.
-        notification.flags = notification.flags or NotificationCompat.FLAG_INSISTENT
-
-        if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
-            NotificationManagerCompat.from(context).notify(alarm.id.hashCode(), notification)
-        }
+        return notification
     }
 
     fun cancel(context: Context, alarmaId: String) {
-        NotificationManagerCompat.from(context).cancel(alarmaId.hashCode())
+        NotificationManagerCompat.from(context).cancel(notificationId(alarmaId))
+    }
+
+    fun cancelId(context: Context, id: Int) {
+        NotificationManagerCompat.from(context).cancel(id)
     }
 
     private fun openAppIntent(context: Context): PendingIntent {

@@ -4,7 +4,7 @@
 |--------------|-------|
 | id           | `alarmas` |
 | estado       | `activo` |
-| versión spec | `4` |
+| versión spec | `6` |
 | superficies  | `android`, `web` |
 
 ## 1. Problema
@@ -80,12 +80,17 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 ### Android
 - **Pantallas:** lista de alarmas activas (P1) con toggle; editor de alarma (la repetición "Mensual" ofrece dos modos: "día N del mes" con opción "último día", y "N-ésimo día de la semana" con opción "último", 2.1); historial de dosis por destinatario (P3).
 - **Al recibir eventos por sync:** tras un pull que traiga `alarma_creada`, `alarma_modificada` o `alarma_desactivada` (incluidos los emitidos por la web con `device_id: "web"`), la app recomputa P1 y reprograma las alarmas del sistema (2.7).
-- **Notificaciones / servicios:** `AlarmManager.setExactAndAllowWhileIdle` por alarma; `BroadcastReceiver` para el disparo; notificación con `fullScreenIntent` y acciones Hecho/Posponer; receiver de `BOOT_COMPLETED` que reprograma desde P1.
+- **Notificaciones / servicios:** `AlarmManager.setAlarmClock` por disparo y por posposición (no se alinea, saca al teléfono de Doze y muestra el ícono de alarma); el timeout de 2 min queda además como respaldo con `setExactAndAllowWhileIdle`. `BroadcastReceiver` para el disparo, que arranca un servicio en primer plano (`systemExempted`) que reproduce el tono de alarma por defecto y la vibración en bucle por `USAGE_ALARM` (no respeta el modo silencio y No molestar lo deja pasar por defecto), con `WakeLock` parcial. El servicio corta a los 2 minutos (→ `ignorada`), al pulsar Hecho o Posponer y cuando aparece un `alarma_atendida` terminal; con varias alarmas a la vez suena mientras quede alguna sin atender. La notificación no tiene sonido propio (canal silencioso): es la del servicio, con `fullScreenIntent` y acciones Hecho/Posponer. La pantalla de alarma se muestra sobre el bloqueo con `showWhenLocked` y `turnScreenOn`, sin pedir desbloquear; Hecho y Posponer funcionan bloqueado. Receiver de `BOOT_COMPLETED` que reprograma desde P1.
 - **Permisos:**
-  - `SCHEDULE_EXACT_ALARM` — las dosis no pueden correrse 15 min por ahorro de batería.
+  - `SCHEDULE_EXACT_ALARM` (solo hasta API 32) — alarmas exactas; en Android 13+ lo reemplaza `USE_EXACT_ALARM`.
+  - `USE_EXACT_ALARM` — Android 13+: las dosis no pueden correrse 15 min por ahorro de batería.
   - `POST_NOTIFICATIONS` — Android 13+.
   - `USE_FULL_SCREEN_INTENT` — mostrar sobre pantalla bloqueada (2.3).
+  - `FOREGROUND_SERVICE` — el servicio que hace sonar la alarma.
+  - `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` — tipo `systemExempted`, previsto para apps con alarmas exactas que siguen sonando en segundo plano.
+  - `WAKE_LOCK` — la CPU no duerme mientras suena.
   - `RECEIVE_BOOT_COMPLETED` — 2.7.
+- **Requisitos del teléfono (ColorOS):** sin ellos el sistema puede cerrar la app a la fuerza y se pierden las alarmas programadas, o bloquear la pantalla completa. En Ajustes → Apps → Cauce: batería «Sin restricciones», inicio automático activado, ventanas emergentes / mostrar sobre otras apps permitido, mostrar en pantalla de bloqueo permitido, y en Notificaciones → Alarmas la pantalla completa permitida. No tienen API pública: la lista de alarmas solo muestra un texto que lo recuerda.
 - **Widget:** ninguno en v1.
 
 ### Server
@@ -186,6 +191,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) Consola web de P1: pide solo `tz` (el endpoint inyecta `now`, igual que P2). El editor rellena destinatario y remedio desde P2, porque P1 no los trae. El `.ics` usa la fecha local de `proximo_disparo` como DTSTART (ocurrencia válida; P1 no trae el ts de creación). HOURLY cuyo COUNT no es divisible entre los VEVENTs reparte el resto en los primeros; sin count ni until, y si 24 no es divisible por interval, exporta 30 días desde ese ancla. `WKST` en un RRULE importado se ignora (Google lo emite; cauce usa WKST=MO).
 - (agente) Formulario web de alarma: al elegir tipo `remedio` sin repetición se propone `HOURLY` cada 8 h (editable). `HOURLY` ofrece cada 4/6/8/12 h u otro valor, y la duración «por días» es solo de UI: se guarda como `count = ⌈días × 24 / interval⌉` (cada 8 h por 5 días = 15). Al editar, un `HOURLY` cuyo `count × interval` cubre días enteros se muestra en días.
 - (agente) Una alarma pospuesta sigue sonando aunque ya se haya emitido su `alarma_desactivada(fin_tratamiento)`; solo una desactivación por usuario cancela la posposición.
+- (agente) v6, tres decisiones de dispositivo. `setAlarmClock` en vez de `setExactAndAllowWhileIdle` porque ColorOS asigna a este último una ventana de 1 h (la alarma llegaba hasta un minuto tarde), mientras que el reloj del sistema usa `setAlarmClock` con `window=0`. Servicio en primer plano en vez de sonido del canal de notificación porque ese sonido es de notificación y ColorOS lo calla en modo silencio; el servicio lo reproduce por `USAGE_ALARM`. Se quita `requestDismissKeyguard` porque con PIN o huella pedía desbloquear en vez de mostrar la alarma encima del bloqueo. La duración de 2 min no cambia (decisión pendiente del dueño). El `showIntent` de la alarma abre la app (cuya pantalla de inicio es la lista de alarmas).
 
 ## 9. Changelog
 
@@ -193,3 +199,4 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - `v2` — 2026-10-22 — la web administra alarmas: alta, edición, baja y carga/exportación en bloque, con eventos por `POST /sync/push` (`device_id: "web"`) que el teléfono aplica al recibir el pull (2.7, 2.9). `repeticion` pasa a subconjunto de RRULE RFC 5545 (`null` = una vez; `count`/`until` excluyentes; `until` inclusive) y se elimina el campo `fin`; schemas nuevos `alarma_creada.v2` y `alarma_modificada.v2`. Fixtures reescritos a v2 y tres casos nuevos: modificación desde web, `until` inclusive y semanal `byday`. Aclaraciones (sin cambios de versión, v2 aún sin implementar): regla `WEEKLY` precisa y alineada con RFC 5545 (interval cuenta semanas ISO, anclada en la semana del primer disparo); reglas de interoperabilidad de exportación `.ics` (HOURLY desdoblado en VEVENTs DAILY, DTSTART de WEEKLY en el primer disparo, VALARM/X- opcionales en el receptor, import acepta HOURLY).
 - `v3` — 2026-10-23 — repetición mensual: `freq: MONTHLY` con `bymonthday` (`1..31` o `-1` = último día) o `byday` con un ordinal (`1MO`..`5SU`, `-1MO`..`-1SU`), excluyentes; un mes sin ese día se salta y no consume `count`. Editor con modo "Mensual" en app y web. Importación `.ics` acepta `MONTHLY` y traduce la forma Apple/Outlook `BYDAY=MO;BYSETPOS=1`; exportación emite `MONTHLY` tal cual. Schemas `alarma_creada.v2` y `alarma_modificada.v2` editados en el lugar (sin eventos producidos, decisión del dueño, §8). Tres fixtures nuevos (P1 ×2, P2 ×1). `YEARLY` fuera de alcance.
 - `v4` — 2026-10-24 — P1 agrega el campo opcional `restantes`: cantidad de disparos del calendario desde `proximo_disparo`, inclusive. Se incluye solo si la repetición tiene `count` y se omite en los demás casos. La exportación `.ics` usa `COUNT=restantes` para no repetir disparos ya consumidos. Fixture P1 nuevo: mensual con `count 5` y dos disparos pasados.
+- `v6` — 2026-10-29 — la alarma suena como la del reloj del sistema: `setAlarmClock` (hora exacta), servicio en primer plano que reproduce el tono y la vibración por `USAGE_ALARM` (suena en silencio), pantalla de alarma sobre el bloqueo sin pedir desbloquear; permisos `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` y `WAKE_LOCK`, y requisitos de ColorOS. Sin cambios de eventos, proyecciones ni fixtures.

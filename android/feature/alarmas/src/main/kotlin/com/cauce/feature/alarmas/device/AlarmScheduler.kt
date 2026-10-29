@@ -25,7 +25,7 @@ internal class AlarmScheduler(context: Context) {
     /** Cancels the previously scheduled firings and programs one exact alarm per plan. */
     fun replaceAll(plans: List<FiringPlan>) {
         cancelScheduledFirings()
-        plans.forEach { plan -> scheduleAt(plan.triggerAt, fireIntent(plan.alarmaId, plan.triggerAt)) }
+        plans.forEach { plan -> scheduleAt(plan.triggerAt, fireIntent(plan.alarmaId, plan.triggerAt), clock = true) }
         prefs.edit()
             .putStringSet(KEY_SCHEDULED_IDS, plans.mapTo(mutableSetOf()) { it.alarmaId })
             .apply()
@@ -33,7 +33,7 @@ internal class AlarmScheduler(context: Context) {
 
     /** SPEC 2.5: "Posponer 10 min" re-fires the same occurrence (same `programada_para`). */
     fun scheduleSnooze(alarmaId: String, programadaPara: String, at: Instant) {
-        scheduleAt(at, fireIntent(alarmaId, Instant.parse(programadaPara), snoozed = true))
+        scheduleAt(at, fireIntent(alarmaId, Instant.parse(programadaPara), snoozed = true), clock = true)
     }
 
     /** SPEC 2.3: the alarm rings until attended or 2 minutes pass (→ `ignorada`). */
@@ -93,23 +93,38 @@ internal class AlarmScheduler(context: Context) {
     }
 
     /**
-     * SPEC §5: `setExactAndAllowWhileIdle` — a dose cannot drift 15 minutes for battery saving.
-     * `SCHEDULE_EXACT_ALARM` can be revoked on API 31+; the fallback is an inexact alarm, which
-     * degrades gracefully instead of crashing.
+     * SPEC §5: firings and snoozes use `setAlarmClock`, like the system clock app: ColorOS does not
+     * align it (a 1 h window with `setExactAndAllowWhileIdle`), it leaves Doze and shows the alarm
+     * icon. The 2-minute timeout is only a backup (the ringing service cuts the sound) and uses
+     * `setExactAndAllowWhileIdle` so it does not show as "next alarm clock". Without exact-alarm
+     * permission (API 31-32) the fallback is an inexact alarm, which degrades instead of crashing.
      */
-    private fun scheduleAt(at: Instant, pending: PendingIntent) {
+    private fun scheduleAt(at: Instant, pending: PendingIntent, clock: Boolean = false) {
         val millis = at.toEpochMilli()
         val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-        if (canExact) {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
-        } else {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
+        when {
+            !canExact -> alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
+            clock -> alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(millis, showIntent()), pending)
+            else -> alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pending)
         }
+    }
+
+    /** What tapping the status-bar alarm icon opens: the app, whose home is the alarm list. */
+    private fun showIntent(): PendingIntent {
+        val intent = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName)
+            ?: Intent()
+        return PendingIntent.getActivity(
+            appContext,
+            SHOW_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private companion object {
         const val PREFS = "alarmas_device"
         const val KEY_SCHEDULED_IDS = "scheduled_ids"
+        const val SHOW_REQUEST_CODE = 0x5a1a
 
         fun fireRequestCode(alarmaId: String): Int = "fire:$alarmaId".hashCode()
         fun snoozeRequestCode(alarmaId: String): Int = "snooze:$alarmaId".hashCode()

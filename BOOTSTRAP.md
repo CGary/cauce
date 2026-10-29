@@ -110,7 +110,7 @@ Conformance test in `:core:events`: Gradle passes `-Dcauce.schemaDir=<rootDir>/.
 
 Event append validates the payload against the embedded JSON Schema in debug builds only (`networknt/json-schema-validator`), to catch agent mistakes early without paying at runtime in release.
 
-**alarmas**: implement everything in `schema/features/alarmas/SPEC.md` section 5 (Android). Exact alarms via `setExactAndAllowWhileIdle`; request `SCHEDULE_EXACT_ALARM` with the settings-deeplink fallback on Android 12+; `fullScreenIntent` notification with "Hecho" and "Posponer 10 min" actions; `BOOT_COMPLETED` receiver reschedules from `alarmas_activas`.
+**alarmas**: implement everything in `schema/features/alarmas/SPEC.md` section 5 (Android). Exact alarms via `setAlarmClock` plus a foreground service that plays the alarm; request `SCHEDULE_EXACT_ALARM` with the settings-deeplink fallback on Android 12+; `fullScreenIntent` notification with "Hecho" and "Posponer 10 min" actions; `BOOT_COMPLETED` receiver reschedules from `alarmas_activas`.
 
 **Gate 3:** `just test-android` green (fixtures pass in Kotlin too), `just apk` produces an APK, and the owner can install it and create/fire an alarm. Remove `continue-on-error` from the android CI job. Commit.
 

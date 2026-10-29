@@ -189,7 +189,9 @@ private fun RequestAlarmPermissions() {
     if (!canFullScreen) {
         PermissionCard(
             title = "Pantalla completa",
-            message = "Sin este permiso la alarma no se muestra sobre la pantalla bloqueada.",
+            message = "Sin este permiso la alarma no se muestra sobre la pantalla bloqueada. " +
+                "En ColorOS activa también, en Ajustes > Apps > Cauce: ventanas emergentes, " +
+                "mostrar en pantalla de bloqueo e inicio automático.",
             action = "Permitir",
             onOpen = {
                 openSettings(

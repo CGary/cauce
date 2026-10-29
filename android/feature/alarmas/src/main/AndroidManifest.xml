@@ -11,6 +11,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Full screen over the lock screen while the phone rings (2.3). -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Foreground service that plays the alarm (USAGE_ALARM), type systemExempted. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <!-- The CPU stays awake while the alarm rings. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Alarms survive reboots (2.7). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -20,6 +25,11 @@
             android:exported="false"
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
+
+        <service
+            android:name=".device.AlarmRingingService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
 
         <receiver
             android:name=".device.AlarmReceiver"

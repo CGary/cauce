@@ -25,10 +25,8 @@ import com.cauce.core.ui.BigButton
 import com.cauce.core.ui.CauceSpacing
 import com.cauce.core.ui.CauceTheme
 import com.cauce.feature.alarmas.Alarm
-import com.cauce.feature.alarmas.foldAlarms
 import com.cauce.feature.alarmas.hasAtendida
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -75,10 +73,7 @@ private fun AlarmAlertScreen(alarmaId: String, programadaPara: String, onDone: (
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val alarm by produceState<Alarm?>(initialValue = null) {
-        val events = context.cauceServices().eventStore
-            .observeByTypes(AlarmasRuntime.stateEventTypes)
-            .first()
-        value = foldAlarms(events).firstOrNull { it.id == alarmaId }
+        value = AlarmasRuntime.loadAlarm(context, alarmaId, programadaPara)
     }
 
     // Close this screen when the firing is closed elsewhere: a notification action or the

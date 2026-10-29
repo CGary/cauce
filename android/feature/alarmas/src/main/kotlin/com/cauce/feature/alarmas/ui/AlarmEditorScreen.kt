@@ -4,7 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -19,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.cauce.core.events.CauceJson
 import com.cauce.core.events.UuidV7
 import com.cauce.core.events.cauceServices
 import com.cauce.core.ui.BigButton
@@ -27,7 +33,12 @@ import com.cauce.core.ui.NumberInput
 import com.cauce.core.ui.Screen
 import com.cauce.core.ui.SectionHeader
 import com.cauce.feature.alarmas.Alarm
+import com.cauce.feature.alarmas.AlarmasActivas
+import com.cauce.feature.alarmas.EditorPrefill
 import com.cauce.feature.alarmas.RepeticionForm
+import com.cauce.feature.alarmas.editorPrefill
+import com.cauce.feature.alarmas.isGcalId
+import com.cauce.feature.alarmas.projectionParams
 import com.cauce.feature.alarmas.WEEKDAY_CODES
 import com.cauce.feature.alarmas.alarmaCreada
 import com.cauce.feature.alarmas.alarmaModificada
@@ -37,7 +48,11 @@ import com.cauce.feature.alarmas.repeticionFormFromJson
 import com.cauce.feature.alarmas.toJson
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.decodeFromJsonElement
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 /**
  * Create and edit share one form, and both emit the full state: `alarma_creada` with a fresh
@@ -51,17 +66,29 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
     val services = remember { context.cauceServices() }
     val scope = rememberCoroutineScope()
 
-    val existing by produceState<Alarm?>(initialValue = null, alarmaId) {
-        if (alarmaId == null) {
+    var loadedAlarm by remember { mutableStateOf<Alarm?>(null) }
+    val existing by produceState<EditorPrefill?>(initialValue = null, alarmaId) {
+        if (alarmaId == null || isGcalId(alarmaId)) {
             value = null
         } else {
             val events = services.eventStore
                 .observeByTypes(AlarmasRuntime.stateEventTypes)
                 .first()
-            value = foldAlarms(events).firstOrNull { it.id == alarmaId && !it.deactivated }
+            val alarm = foldAlarms(events).firstOrNull { it.id == alarmaId && !it.deactivated }
+            if (alarm != null) {
+                val zone = ZoneId.systemDefault()
+                val json = services.projections.compute(
+                    AlarmasActivas.key, events, projectionParams(Instant.now(), zone),
+                )
+                val row = CauceJson.output.decodeFromJsonElement(AlarmasActivas.serializer, json)
+                    .firstOrNull { it.alarmaId == alarmaId }
+                loadedAlarm = alarm
+                value = editorPrefill(alarm, row, zone)
+            }
         }
     }
 
+    var fecha by remember { mutableStateOf("") }
     var titulo by remember { mutableStateOf("") }
     var tipo by remember { mutableStateOf("remedio") }
     var hora by remember { mutableStateOf("08:00") }
@@ -72,13 +99,15 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(existing) {
-        val loaded = existing ?: return@LaunchedEffect
+        val prefill = existing ?: return@LaunchedEffect
+        val loaded = loadedAlarm ?: return@LaunchedEffect
         titulo = loaded.titulo
         tipo = loaded.tipo
-        hora = loaded.horaRaw
+        hora = prefill.hora
+        fecha = prefill.fecha
         destinatario = loaded.destinatario.orEmpty()
         remedio = loaded.remedio.orEmpty()
-        val parsed = repeticionFormFromJson(loaded.repeticion)
+        val parsed = prefill.form
         form = parsed
         limite = when {
             parsed.count != null -> Limite.COUNT
@@ -128,6 +157,8 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         )
 
+        FechaInicio(fecha = fecha, onChange = { fecha = it })
+
         RepeticionSection(form = form, limite = limite, onLimite = { limite = it }, onChange = { form = it })
 
         error?.let {
@@ -151,12 +182,14 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
                             device, now, UuidV7.newId(), titulo.trim(), tipo, hora.trim(),
                             repeticion, destinatario.trim().ifBlank { null },
                             remedio.trim().ifBlank { null },
+                            fecha = fecha.ifBlank { null },
                         )
                     } else {
                         alarmaModificada(
                             device, now, alarmaId, titulo.trim(), tipo, hora.trim(),
                             repeticion, destinatario.trim().ifBlank { null },
                             remedio.trim().ifBlank { null },
+                            fecha = fecha.ifBlank { null },
                         )
                     }
                 }
@@ -173,6 +206,35 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
                 )
             },
         )
+    }
+}
+
+/** Optional start date (SPEC 2.1): empty means "desde ahora". */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FechaInicio(fecha: String, onChange: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    SectionHeader(title = "Fecha de inicio")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = { open = true }) { Text(fecha.ifBlank { "Desde ahora" }) }
+        if (fecha.isNotBlank()) TextButton(onClick = { onChange("") }) { Text("Quitar") }
+    }
+    if (open) {
+        val initial = runCatching { LocalDate.parse(fecha) }.getOrNull()
+            ?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli()
+        val state = rememberDatePickerState(initialSelectedDateMillis = initial)
+        DatePickerDialog(
+            onDismissRequest = { open = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let {
+                        onChange(Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString())
+                    }
+                    open = false
+                }) { Text("Aceptar") }
+            },
+            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancelar") } },
+        ) { DatePicker(state = state) }
     }
 }
 

@@ -4,7 +4,11 @@ import android.content.Context
 import android.os.Build
 import com.cauce.core.events.CauceJson
 import com.cauce.core.events.cauceServices
+import com.cauce.feature.alarmas.Alarm
 import com.cauce.feature.alarmas.AlarmasActivas
+import com.cauce.feature.alarmas.foldAlarms
+import com.cauce.feature.alarmas.gcalAlarm
+import com.cauce.feature.alarmas.isGcalId
 import com.cauce.feature.alarmas.planFirings
 import com.cauce.feature.alarmas.projectionParams
 import kotlinx.coroutines.CoroutineScope
@@ -24,12 +28,22 @@ import java.time.ZoneId
  */
 internal object AlarmasRuntime {
     /** Event types that change P1, so the ones that force a reschedule (SPEC 2.7). */
-    val stateEventTypes = setOf("alarma_creada", "alarma_modificada", "alarma_desactivada")
+    val stateEventTypes: Set<String> = AlarmasActivas.eventTypes
 
     val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Stable id for `device_id` in the envelopes this phone produces. */
     fun deviceId(): String = Build.MODEL.ifBlank { "android" }
+
+    /** The ringable alarm of a firing: a `gcal:` entry comes from its P1 row, any other from the state fold. */
+    suspend fun loadAlarm(context: Context, alarmaId: String, programadaPara: String): Alarm? {
+        val events = context.cauceServices().eventStore.observeByTypes(stateEventTypes).first()
+        return if (isGcalId(alarmaId)) {
+            gcalAlarm(events, alarmaId, Instant.parse(programadaPara), ZoneId.systemDefault())
+        } else {
+            foldAlarms(events).firstOrNull { it.id == alarmaId }
+        }
+    }
 
     fun rescheduleAsync(context: Context) {
         val appContext = context.applicationContext

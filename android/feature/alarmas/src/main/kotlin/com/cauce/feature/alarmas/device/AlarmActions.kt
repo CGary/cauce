@@ -1,17 +1,17 @@
 package com.cauce.feature.alarmas.device
 
 import android.content.Context
-import com.cauce.core.events.Envelope
 import com.cauce.core.events.cauceServices
 import com.cauce.feature.alarmas.SnoozeOutcome
 import com.cauce.feature.alarmas.alarmaAtendida
-import com.cauce.feature.alarmas.alarmaDesactivada
-import com.cauce.feature.alarmas.alarmaDisparada
-import com.cauce.feature.alarmas.dosisDada
+import com.cauce.feature.alarmas.fireEvents
+import com.cauce.feature.alarmas.gcalAlarm
+import com.cauce.feature.alarmas.hechoEvents
+import com.cauce.feature.alarmas.isGcalId
+import com.cauce.feature.alarmas.shouldRingGcal
 import com.cauce.feature.alarmas.foldAlarms
 import com.cauce.feature.alarmas.hasAtendida
 import com.cauce.feature.alarmas.nextSnoozeOutcome
-import com.cauce.feature.alarmas.occurrences
 import com.cauce.feature.alarmas.shouldRing
 import kotlinx.coroutines.flow.first
 import java.time.Instant
@@ -34,24 +34,29 @@ internal object AlarmActions {
     suspend fun fire(context: Context, alarmaId: String, programadaPara: String, snoozed: Boolean) {
         val services = context.cauceServices()
         val events = services.eventStore.observeByTypes(AlarmasRuntime.stateEventTypes).first()
-        if (!shouldRing(events, alarmaId, snoozed)) {
+        val zone = ZoneId.systemDefault()
+        val programadaParaInstant = Instant.parse(programadaPara)
+        val gcal = isGcalId(alarmaId)
+        val rings = if (gcal) {
+            shouldRingGcal(events, alarmaId, programadaParaInstant, zone, snoozed)
+        } else {
+            shouldRing(events, alarmaId, snoozed)
+        }
+        if (!rings) {
             AlarmNotifications.cancel(context, alarmaId)
             return
         }
-        val alarm = foldAlarms(events).first { it.id == alarmaId }
+        val alarm = if (gcal) {
+            gcalAlarm(events, alarmaId, programadaParaInstant, zone)
+        } else {
+            foldAlarms(events).first { it.id == alarmaId }
+        }
 
         val device = AlarmasRuntime.deviceId()
         val now = Instant.now()
-        val programadaParaInstant = Instant.parse(programadaPara)
-        val outbox = mutableListOf<Envelope>(alarmaDisparada(device, now, alarmaId, programadaParaInstant))
-        if (!snoozed) {
-            val hasNext = occurrences(alarm.createdAt, alarm.hora, alarm.rule, ZoneId.systemDefault())
-                .any { it.isAfter(programadaParaInstant) }
-            if (!hasNext) {
-                outbox += alarmaDesactivada(device, now, alarmaId, "fin_tratamiento")
-            }
-        }
-        services.eventStore.append(outbox)
+        services.eventStore.append(
+            fireEvents(device, now, alarmaId, programadaParaInstant, snoozed, alarm, zone),
+        )
 
         val notification = AlarmNotifications.build(context, alarm, programadaPara)
         val ringing = AlarmRingingService.start(
@@ -69,21 +74,12 @@ internal object AlarmActions {
     suspend fun hecho(context: Context, alarmaId: String, programadaPara: String) {
         val services = context.cauceServices()
         val events = services.eventStore.observeByTypes(AlarmasRuntime.stateEventTypes).first()
-        val alarm = foldAlarms(events).firstOrNull { it.id == alarmaId }
+        val alarm = if (isGcalId(alarmaId)) null else foldAlarms(events).firstOrNull { it.id == alarmaId }
 
         val device = AlarmasRuntime.deviceId()
         val now = Instant.now()
         val programadaParaInstant = Instant.parse(programadaPara)
-        val outbox = mutableListOf(alarmaAtendida(device, now, alarmaId, programadaParaInstant, "hecho"))
-        if (alarm != null && alarm.tipo == "remedio" &&
-            !alarm.destinatario.isNullOrBlank() && !alarm.remedio.isNullOrBlank()
-        ) {
-            outbox += dosisDada(device, now, alarmaId, alarm.destinatario, alarm.remedio, programadaParaInstant)
-        }
-        if (alarm != null && alarm.rule == null) {
-            outbox += alarmaDesactivada(device, now, alarmaId, "una_vez_atendida")
-        }
-        services.eventStore.append(outbox)
+        services.eventStore.append(hechoEvents(device, now, alarmaId, programadaParaInstant, alarm))
 
         AlarmScheduler(context).cancelTimeout(alarmaId)
         AlarmRingingService.close(context, alarmaId, programadaPara)

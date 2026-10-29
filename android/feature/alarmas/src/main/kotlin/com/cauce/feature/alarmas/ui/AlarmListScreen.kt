@@ -48,6 +48,7 @@ import com.cauce.feature.alarmas.AlarmasActivas
 import com.cauce.feature.alarmas.alarmaDesactivada
 import com.cauce.feature.alarmas.device.AlarmasRuntime
 import com.cauce.feature.alarmas.describe
+import com.cauce.feature.alarmas.isGcalId
 import com.cauce.feature.alarmas.projectionParams
 import com.cauce.feature.alarmas.repeticionFormFromJson
 import kotlinx.coroutines.launch
@@ -88,6 +89,18 @@ fun AlarmListScreen(
             )
         }
         activas.forEach { alarma ->
+            if (isGcalId(alarma.alarmaId)) {
+                // Read-only (SPEC 2.10): the aviso is edited in calendario_google's meetings screen.
+                // P1 does not carry the account, so the origin is labeled generically (SPEC §8).
+                ListRow(
+                    title = alarma.titulo,
+                    subtitle = listOf(
+                        "${alarma.hora} · Google Calendar",
+                        "Próximo: ${formatInstantForUi(alarma.proximoDisparo)}",
+                    ).joinToString("\n"),
+                )
+                return@forEach
+            }
             ListRow(
                 title = alarma.titulo,
                 subtitle = listOf(

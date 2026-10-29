@@ -16,6 +16,7 @@ import java.time.Instant
 internal const val DEFAULT_USER_ID: String = "u1"
 
 private val HORA = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
+private val FECHA = Regex("^\\d{4}-\\d{2}-\\d{2}$")
 private val TIPOS = setOf("remedio", "reunion", "otro")
 private val MOTIVOS_DESACTIVADA = setOf("usuario", "fin_tratamiento", "una_vez_atendida")
 private val ACCIONES_ATENDIDA = setOf("hecho", "pospuesta", "ignorada")
@@ -37,7 +38,7 @@ internal fun newEnvelope(
     payload = payload,
 )
 
-/** Full state of an alarm: the payload shared by `alarma_creada` v2 and `alarma_modificada` v2. */
+/** Full state of an alarm: the payload shared by `alarma_creada` v3 and `alarma_modificada` v3 (`fecha` omitted when empty). */
 internal fun alarmaStatePayload(
     alarmaId: String,
     titulo: String,
@@ -46,11 +47,16 @@ internal fun alarmaStatePayload(
     repeticion: JsonElement,
     destinatario: String? = null,
     remedio: String? = null,
+    fecha: String? = null,
 ): JsonObject {
     require(alarmaId.isNotBlank()) { "alarma_id vacío" }
     require(titulo.isNotBlank() && titulo.length <= 120) { "titulo: 1..120 caracteres" }
     require(tipo in TIPOS) { "tipo inválido: $tipo" }
     require(HORA.matches(hora)) { "hora inválida: $hora" }
+    if (fecha != null) {
+        require(FECHA.matches(fecha)) { "fecha inválida: $fecha" }
+        require(runCatching { java.time.LocalDate.parse(fecha) }.isSuccess) { "fecha inválida: $fecha" }
+    }
     if (tipo == "remedio") {
         require(!destinatario.isNullOrBlank() && destinatario.length <= 60) {
             "tipo remedio exige destinatario (1..60)"
@@ -66,6 +72,7 @@ internal fun alarmaStatePayload(
     )
     if (destinatario != null) fields["destinatario"] = JsonPrimitive(destinatario)
     if (remedio != null) fields["remedio"] = JsonPrimitive(remedio)
+    if (fecha != null) fields["fecha"] = JsonPrimitive(fecha)
     return JsonObject(fields)
 }
 
@@ -79,10 +86,11 @@ internal fun alarmaCreada(
     repeticion: JsonElement,
     destinatario: String? = null,
     remedio: String? = null,
+    fecha: String? = null,
     id: String = UuidV7.newId(),
 ): Envelope = newEnvelope(
-    deviceId, "alarma_creada", 2, ts,
-    alarmaStatePayload(alarmaId, titulo, tipo, hora, repeticion, destinatario, remedio),
+    deviceId, "alarma_creada", 3, ts,
+    alarmaStatePayload(alarmaId, titulo, tipo, hora, repeticion, destinatario, remedio, fecha),
     id = id,
 )
 
@@ -96,10 +104,11 @@ internal fun alarmaModificada(
     repeticion: JsonElement,
     destinatario: String? = null,
     remedio: String? = null,
+    fecha: String? = null,
     id: String = UuidV7.newId(),
 ): Envelope = newEnvelope(
-    deviceId, "alarma_modificada", 2, ts,
-    alarmaStatePayload(alarmaId, titulo, tipo, hora, repeticion, destinatario, remedio),
+    deviceId, "alarma_modificada", 3, ts,
+    alarmaStatePayload(alarmaId, titulo, tipo, hora, repeticion, destinatario, remedio, fecha),
     id = id,
 )
 

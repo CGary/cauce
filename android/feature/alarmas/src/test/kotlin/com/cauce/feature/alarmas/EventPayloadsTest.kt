@@ -42,7 +42,7 @@ class EventPayloadsTest {
             destinatario = "Juan",
             remedio = "Amoxicilina",
         )
-        assertEquals(2, event.v)
+        assertEquals(3, event.v)
         assertJson(
             """
             {
@@ -76,7 +76,7 @@ class EventPayloadsTest {
             hora = "09:30",
             repeticion = repeticion,
         )
-        assertEquals(2, event.v)
+        assertEquals(3, event.v)
         assertJson(
             """
             {

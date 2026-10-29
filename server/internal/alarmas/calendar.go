@@ -309,7 +309,10 @@ func (c *calendario) weeklySequence() func() (time.Time, bool) {
 // days that fire: the byday list, or the weekday of the first firing.
 func (c *calendario) weeklyOffsets(first time.Time) []int {
 	if len(c.rep.Byday) == 0 {
-		return []int{isoOffset(first.Weekday())}
+		// `first` is a UTC-located instant from horaLocal; the weekday that
+		// repeats is the local one (21h La_Paz on a Tuesday is 01h UTC
+		// Wednesday), SPEC section 4.
+		return []int{isoOffset(first.In(c.loc).Weekday())}
 	}
 	seen := map[int]bool{}
 	offsets := []int{}

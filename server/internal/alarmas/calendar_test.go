@@ -10,6 +10,83 @@ import (
 
 func intPtr(v int) *int { return &v }
 
+// TestWeeklyNoBydayLocalWeekday covers WEEKLY without byday (SPEC section 4):
+// the weekday that repeats is the LOCAL weekday of the first firing, not the
+// UTC one. hora 21:00 in America/La_Paz (UTC-4) is 01:00Z of the next day, so
+// the UTC weekday is off by one and the alarm used to fire on the wrong day.
+func TestWeeklyNoBydayLocalWeekday(t *testing.T) {
+	tests := []struct {
+		name   string
+		hora   string
+		fecha  string // v3 anchor; empty = anchor at the creada ts
+		creada string // RFC 3339; the alarma_creada.ts
+		want   []string
+	}{
+		{
+			name:   "WEEKLY first firing: local weekday, created before hora",
+			hora:   "21:00",
+			creada: "2026-11-04T00:00:00Z", // Tuesday 20:00 local
+			want: []string{
+				"2026-11-04T01:00:00Z", // Tuesday 21:00 local
+				"2026-11-11T01:00:00Z", // next Tuesday, not Wednesday
+				"2026-11-18T01:00:00Z",
+			},
+		},
+		{
+			name:   "WEEKLY with fecha: fires weekly on the fecha's local weekday",
+			hora:   "21:00",
+			fecha:  "2026-11-04", // Wednesday local
+			creada: "2026-11-04T00:00:00Z",
+			want: []string{
+				"2026-11-05T01:00:00Z", // the fecha itself, Wednesday 21:00 local
+				"2026-11-12T01:00:00Z",
+				"2026-11-19T01:00:00Z",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			loc, err := time.LoadLocation("America/La_Paz")
+			if err != nil {
+				t.Fatalf("LoadLocation: %v", err)
+			}
+			creada, err := time.Parse(time.RFC3339, tt.creada)
+			if err != nil {
+				t.Fatalf("creada: %v", err)
+			}
+			st := &alarma{
+				alarmaPayload: alarmaPayload{
+					AlarmaID: "a1",
+					Hora:     tt.hora,
+					Fecha:    tt.fecha,
+					Repeticion: &repeticion{
+						Freq: "WEEKLY",
+					},
+				},
+				creada: creada,
+			}
+			ix := &indice{}
+			cal, err := ix.calendario(st, loc)
+			if err != nil {
+				t.Fatalf("calendario: %v", err)
+			}
+			got := []string{}
+			cal.eachFiring(func(f time.Time) bool {
+				got = append(got, f.UTC().Format(time.RFC3339))
+				return len(got) < len(tt.want)+1
+			})
+			if len(got) != len(tt.want)+1 {
+				t.Fatalf("sequence ended after %d firings, want more than %d (firings %v)", len(got), len(tt.want), got)
+			}
+			for i, want := range tt.want {
+				if got[i] != want {
+					t.Errorf("firing[%d] = %s, want %s", i, got[i], want)
+				}
+			}
+		})
+	}
+}
+
 // TestMonthlyFirings covers the MONTHLY calendar edges of SPEC section 4:
 // a 31st that does not exist is skipped without consuming count, -1 counts
 // from the end of the month, a missing 5th weekday skips the month, and

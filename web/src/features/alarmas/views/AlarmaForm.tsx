@@ -14,6 +14,7 @@ import {
 type FieldKey =
   | 'titulo'
   | 'hora'
+  | 'fecha'
   | 'destinatario'
   | 'remedio'
   | 'interval'
@@ -28,6 +29,7 @@ function fieldOf(message: string): FieldKey | null {
   const prefixes: [string, FieldKey][] = [
     ['El título', 'titulo'],
     ['La hora', 'hora'],
+    ['La fecha', 'fecha'],
     ['El destinatario', 'destinatario'],
     ['El remedio', 'remedio'],
     ['El intervalo', 'interval'],
@@ -143,6 +145,21 @@ export function AlarmaForm({
               <option value="reunion">Reunión</option>
               <option value="otro">Otro</option>
             </select>
+          )}
+        </Field>
+        <Field
+          label="Fecha de inicio"
+          hint="Vacío = desde ahora."
+          error={errorFor('fecha')}
+        >
+          {(c) => (
+            <input
+              {...c}
+              className={inputClass}
+              type="date"
+              value={form.fecha}
+              onChange={(event) => set('fecha', event.target.value)}
+            />
           )}
         </Field>
         <Field

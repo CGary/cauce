@@ -5,7 +5,7 @@ export type TipoAlarma = 'remedio' | 'reunion' | 'otro'
 export type Freq = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'HOURLY'
 export type Weekday = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU'
 
-/** Subconjunto de RRULE de alarma_creada.v2 / alarma_modificada.v2. */
+/** Subconjunto de RRULE de alarma_creada.v3 / alarma_modificada.v3. */
 export interface Repeticion {
   freq: Freq
   interval?: number
@@ -41,12 +41,14 @@ export interface ActivasParams {
   tz: string
 }
 
-/** Payload completo de alarma_creada.v2 / alarma_modificada.v2. */
+/** Payload completo de alarma_creada.v3 / alarma_modificada.v3. */
 export interface AlarmaPayload {
   alarma_id: string
   titulo: string
   tipo: TipoAlarma
   hora: string
+  /** Fecha local del primer disparo (AAAA-MM-DD). Opcional: sin ella, "desde ahora". */
+  fecha?: string
   repeticion: Repeticion | null
   destinatario?: string
   remedio?: string
@@ -57,6 +59,8 @@ export interface BulkAlarma {
   titulo: string
   tipo: TipoAlarma
   hora: string
+  /** Fecha local del primer disparo (AAAA-MM-DD). Opcional: sin ella, "desde ahora". */
+  fecha?: string
   repeticion: Repeticion | null
   destinatario?: string
   remedio?: string

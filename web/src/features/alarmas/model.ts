@@ -1,3 +1,4 @@
+import { browserTimeZone } from '../../core/time'
 import type {
   AlarmaActiva,
   AlarmaPayload,
@@ -20,9 +21,17 @@ export const WEEKDAY_LABEL: Record<Weekday, string> = {
   SU: 'Domingo',
 }
 
-export const V_ALARMA_CREADA = 2
-export const V_ALARMA_MODIFICADA = 2
+export const V_ALARMA_CREADA = 3
+export const V_ALARMA_MODIFICADA = 3
 export const V_ALARMA_DESACTIVADA = 1
+
+/** Prefijo de las entradas de P1 que vienen de Google Calendar (`calendario_google`, 2.10). */
+const GCAL_PREFIX = 'gcal:'
+
+/** Las reuniones de Google son de solo lectura: no se editan ni se desactivan desde `alarmas`. */
+export function isGoogleCalendar(alarmaId: string): boolean {
+  return alarmaId.startsWith(GCAL_PREFIX)
+}
 
 export type FreqForm = 'una_vez' | Freq
 export type MonthlyMode = 'bymonthday' | 'byday'
@@ -36,6 +45,8 @@ export interface AlarmaFormState {
   titulo: string
   tipo: TipoAlarma
   hora: string
+  /** Fecha local del primer disparo (AAAA-MM-DD). Vacía = "desde ahora". */
+  fecha: string
   freq: FreqForm
   interval: string
   limit: LimitMode
@@ -61,6 +72,7 @@ export function emptyForm(): AlarmaFormState {
     titulo: '',
     tipo: 'otro',
     hora: '08:00',
+    fecha: '',
     freq: 'una_vez',
     interval: '',
     limit: 'none',
@@ -89,28 +101,70 @@ export function isWeekday(value: string): value is Weekday {
   return WEEKDAY_RE.test(value)
 }
 
+/**
+ * Fecha local (AAAA-MM-DD) de un instante RFC 3339, en la zona de la sesión web.
+ * Es la fecha del primer disparo que P1 conoce (`proximo_disparo`).
+ */
+export function localDate(instant: string, tz: string = browserTimeZone()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(instant))
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '00'
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
+
+/**
+ * Hora local (HH:MM) de un instante RFC 3339, en la zona de la sesión web.
+ * Junto con `localDate` (misma zona) reconstruye el instante local de `proximo_disparo`.
+ */
+export function localTime(instant: string, tz: string = browserTimeZone()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instant))
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '00'
+  return `${get('hour')}:${get('minute')}`
+}
+
 export function activaToForm(
   row: AlarmaActiva,
   extra?: { destinatario?: string; remedio?: string },
+  tz: string = browserTimeZone(),
 ): AlarmaFormState {
   const form = emptyForm()
   form.titulo = row.titulo
   form.tipo = isTipo(row.tipo) ? row.tipo : 'otro'
   form.hora = row.hora
+  // P1 no trae `fecha`: la mejor fecha que conoce es la del próximo disparo. Para
+  // una puntual es su fecha; para una serie la reancla en el próximo disparo.
+  form.fecha = localDate(row.proximo_disparo, tz)
   form.destinatario = extra?.destinatario ?? ''
   form.remedio = extra?.remedio ?? ''
   const rep = row.repeticion
   if (!rep || !isFreq(rep.freq)) return form
   form.freq = rep.freq
+  // Un HOURLY se ancla en la hora del próximo disparo, no en la hora original:
+  // con `restantes` como count, anclar más temprano perdería una dosis y anclar
+  // más tarde se saltaría otra. Así `fecha` + `hora` es `proximo_disparo`.
+  if (rep.freq === 'HOURLY') form.hora = localTime(row.proximo_disparo, tz)
   form.interval = rep.interval !== undefined ? String(rep.interval) : ''
-  const hours =
-    rep.count !== undefined && rep.freq === 'HOURLY' ? rep.count * (rep.interval ?? 1) : 0
-  if (rep.count !== undefined && hours > 0 && hours % 24 === 0) {
+  // Al reanclar en el próximo disparo, la serie conserva solo los disparos que
+  // faltan: `restantes` es el `count` nuevo (si no hay `count`, no hay límite).
+  const count = rep.count !== undefined ? (row.restantes ?? rep.count) : undefined
+  const hours = count !== undefined && rep.freq === 'HOURLY' ? count * (rep.interval ?? 1) : 0
+  if (count !== undefined && hours > 0 && hours % 24 === 0) {
     form.limit = 'days'
     form.dias = String(hours / 24)
-  } else if (rep.count !== undefined) {
+  } else if (count !== undefined) {
     form.limit = 'count'
-    form.count = String(rep.count)
+    form.count = String(count)
   } else if (rep.until) {
     form.limit = 'until'
     form.until = rep.until
@@ -171,6 +225,9 @@ export function validateForm(form: AlarmaFormState): string | null {
   if (titulo.length < 1 || titulo.length > 120)
     return 'El título tiene que tener entre 1 y 120 caracteres'
   if (!normalizeHora(form.hora)) return 'La hora tiene que ser HH:MM'
+  if (form.fecha.trim() !== '' && !isDate(form.fecha.trim())) {
+    return 'La fecha de inicio tiene que ser una fecha AAAA-MM-DD'
+  }
   if (form.tipo === 'remedio') {
     const destinatario = form.destinatario.trim()
     const remedio = form.remedio.trim()
@@ -255,6 +312,8 @@ export function formToPayload(form: AlarmaFormState, alarmaId: string): AlarmaPa
     hora: normalizeHora(form.hora) ?? form.hora,
     repeticion: buildRepeticion(form),
   }
+  // Sin fecha, "desde ahora": la clave no viaja (nunca null ni "").
+  if (form.fecha.trim() !== '') payload.fecha = form.fecha.trim()
   if (form.tipo === 'remedio') {
     payload.destinatario = form.destinatario.trim()
     payload.remedio = form.remedio.trim()
@@ -270,6 +329,7 @@ export function payloadRecord(payload: AlarmaPayload): Record<string, unknown> {
     hora: payload.hora,
     repeticion: payload.repeticion,
   }
+  if (payload.fecha !== undefined) out.fecha = payload.fecha
   if (payload.destinatario !== undefined) out.destinatario = payload.destinatario
   if (payload.remedio !== undefined) out.remedio = payload.remedio
   return out
@@ -388,6 +448,12 @@ export function parseBulkEntry(value: unknown, index: number): BulkAlarma | stri
   const repeticion = parseRepeticion(value.repeticion)
   if (typeof repeticion === 'string') return `Ítem ${index}: ${repeticion}`
   const entry: BulkAlarma = { titulo, tipo, hora, repeticion }
+  if (value.fecha !== undefined) {
+    if (typeof value.fecha !== 'string' || !isDate(value.fecha)) {
+      return `Ítem ${index}: fecha inválida`
+    }
+    entry.fecha = value.fecha
+  }
   if (tipo === 'remedio') {
     const destinatario = value.destinatario
     const remedio = value.remedio
@@ -434,6 +500,7 @@ export function bulkToPayload(entry: BulkAlarma, alarmaId: string): AlarmaPayloa
     hora: entry.hora,
     repeticion: entry.repeticion,
   }
+  if (entry.fecha !== undefined) payload.fecha = entry.fecha
   if (entry.destinatario !== undefined) payload.destinatario = entry.destinatario
   if (entry.remedio !== undefined) payload.remedio = entry.remedio
   return payload
@@ -446,6 +513,7 @@ function cleanBulk(entry: BulkAlarma): BulkAlarma {
     hora: entry.hora,
     repeticion: entry.repeticion,
   }
+  if (entry.fecha !== undefined) out.fecha = entry.fecha
   if (entry.destinatario !== undefined) out.destinatario = entry.destinatario
   if (entry.remedio !== undefined) out.remedio = entry.remedio
   return out
@@ -455,17 +523,38 @@ export function exportBulk(alarmas: BulkAlarma[]): string {
   return `${JSON.stringify({ formato: 'cauce.alarmas', version: 1, alarmas: alarmas.map(cleanBulk) }, null, 2)}\n`
 }
 
+/**
+ * Filas de P1 → ítems de `cauce.alarmas`.
+ *
+ * Las entradas `gcal:` no se exportan: son reuniones de Google, no alarmas de cauce.
+ * La `fecha` que se lleva es la local de `proximo_disparo` (lo único que P1 conoce)
+ * y el `count` es `restantes`, para que reimportar no repita disparos ya consumidos.
+ * Un `HOURLY` lleva además la `hora` local de `proximo_disparo`: con la hora original
+ * el ancla no coincidiría con el próximo disparo y se perdería o saltaría una dosis.
+ */
 export function rowsToBulk(
   rows: AlarmaActiva[],
   extras: { alarma_id: string; destinatario: string; remedio: string }[],
+  tz: string = browserTimeZone(),
 ): BulkAlarma[] {
   const byId = new Map(extras.map((row) => [row.alarma_id, row]))
   const out: BulkAlarma[] = []
   for (const row of rows) {
+    if (isGoogleCalendar(row.alarma_id)) continue
     const tipo = isTipo(row.tipo) ? row.tipo : 'otro'
     const repeticion = row.repeticion === null ? null : parseRepeticion(row.repeticion)
     if (typeof repeticion === 'string') continue
-    const entry: BulkAlarma = { titulo: row.titulo, tipo, hora: row.hora, repeticion }
+    if (repeticion && repeticion.count !== undefined && row.restantes !== undefined) {
+      repeticion.count = row.restantes
+    }
+    const hora = repeticion?.freq === 'HOURLY' ? localTime(row.proximo_disparo, tz) : row.hora
+    const entry: BulkAlarma = {
+      titulo: row.titulo,
+      tipo,
+      hora,
+      fecha: localDate(row.proximo_disparo, tz),
+      repeticion,
+    }
     const extra = byId.get(row.alarma_id)
     if (tipo === 'remedio' && extra) {
       entry.destinatario = extra.destinatario

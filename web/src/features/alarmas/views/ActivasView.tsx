@@ -27,6 +27,7 @@ import {
   desactivadaPayload,
   emptyForm,
   exportBulk,
+  isGoogleCalendar,
   parseBulk,
   payloadRecord,
   repeticionResumen,
@@ -150,7 +151,7 @@ export default function ActivasView() {
 
   function sources(rows: AlarmaActiva[]): IcsSource[] {
     return rows.flatMap((row) => {
-      const entry = rowsToBulk([row], extras)[0]
+      const entry = rowsToBulk([row], extras, tz)[0]
       if (!entry) return []
       return [
         {
@@ -163,6 +164,10 @@ export default function ActivasView() {
     })
   }
 
+  const rows = activas.data ?? []
+  // Las reuniones de Google no son alarmas de cauce: no se editan ni se exportan.
+  const exportables = rowsToBulk(rows, extras, tz)
+
   const columns: Column<AlarmaActiva>[] = [
     { header: 'Título', render: (row) => row.titulo },
     {
@@ -174,38 +179,39 @@ export default function ActivasView() {
     { header: 'Próximo disparo', render: (row) => formatDateTime(row.proximo_disparo) },
     {
       header: 'Acciones',
-      render: (row) => (
-        <div className="flex gap-2">
-          <Button
-            aria-label={`Editar ${row.titulo}`}
-            disabled={!adherenciaReady}
-            onClick={() => {
-              const extra = extras.find((item) => item.alarma_id === row.alarma_id)
-              setPendingDelete(null)
-              setEditing({
-                mode: 'editar',
-                alarmaId: row.alarma_id,
-                initial: activaToForm(row, extra),
-              })
-            }}
-          >
-            Editar
-          </Button>
-          <Button
-            aria-label={`Eliminar ${row.titulo}`}
-            onClick={() => {
-              setEditing(null)
-              setPendingDelete(row)
-            }}
-          >
-            Eliminar
-          </Button>
-        </div>
-      ),
+      render: (row) =>
+        isGoogleCalendar(row.alarma_id) ? (
+          <span className="text-caption text-muted">Google Calendar · se edita en Reuniones</span>
+        ) : (
+          <div className="flex gap-2">
+            <Button
+              aria-label={`Editar ${row.titulo}`}
+              disabled={!adherenciaReady}
+              onClick={() => {
+                const extra = extras.find((item) => item.alarma_id === row.alarma_id)
+                setPendingDelete(null)
+                setEditing({
+                  mode: 'editar',
+                  alarmaId: row.alarma_id,
+                  initial: activaToForm(row, extra, tz),
+                })
+              }}
+            >
+              Editar
+            </Button>
+            <Button
+              aria-label={`Eliminar ${row.titulo}`}
+              onClick={() => {
+                setEditing(null)
+                setPendingDelete(row)
+              }}
+            >
+              Eliminar
+            </Button>
+          </div>
+        ),
     },
   ]
-
-  const rows = activas.data ?? []
 
   function openCreate() {
     setPendingDelete(null)
@@ -236,15 +242,15 @@ export default function ActivasView() {
         </Button>
         <span aria-hidden="true" className="hidden h-6 w-px bg-line sm:block" />
         <Button
-          disabled={rows.length === 0 || !adherenciaReady}
+          disabled={exportables.length === 0 || !adherenciaReady}
           onClick={() =>
-            downloadText('alarmas.json', exportBulk(rowsToBulk(rows, extras)), 'application/json')
+            downloadText('alarmas.json', exportBulk(exportables), 'application/json')
           }
         >
           Exportar JSON
         </Button>
         <Button
-          disabled={rows.length === 0 || !adherenciaReady}
+          disabled={exportables.length === 0 || !adherenciaReady}
           onClick={() =>
             downloadText(
               'alarmas.ics',

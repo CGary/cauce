@@ -18,6 +18,7 @@ describe('ics', () => {
         hora: '08:00',
         repeticion: { freq: 'DAILY', interval: 2, until: '2026-12-31' },
         proximo_disparo: '2026-10-24T12:00:00Z',
+        fecha: '2026-10-24',
       }),
       source({
         alarma_id: 'a2',
@@ -26,6 +27,7 @@ describe('ics', () => {
         hora: '10:00',
         repeticion: { freq: 'WEEKLY', byday: ['MO', 'WE'] },
         proximo_disparo: '2026-10-26T14:00:00Z',
+        fecha: '2026-10-26',
       }),
       source({
         alarma_id: 'a3',
@@ -34,6 +36,7 @@ describe('ics', () => {
         hora: '09:00',
         repeticion: { freq: 'MONTHLY', bymonthday: -1 },
         proximo_disparo: '2026-10-31T13:00:00Z',
+        fecha: '2026-10-31',
       }),
       source({
         alarma_id: 'a4',
@@ -43,6 +46,7 @@ describe('ics', () => {
         repeticion: { freq: 'MONTHLY', byday: ['1MO'], count: 3 },
         proximo_disparo: '2026-11-02T13:00:00Z',
         restantes: 3,
+        fecha: '2026-11-02',
       }),
       source({
         alarma_id: 'a5',
@@ -51,6 +55,7 @@ describe('ics', () => {
         hora: '07:30',
         repeticion: null,
         proximo_disparo: '2026-10-24T11:30:00Z',
+        fecha: '2026-10-24',
       }),
       source({
         alarma_id: 'a6',
@@ -61,6 +66,7 @@ describe('ics', () => {
         destinatario: 'Juan',
         remedio: 'Amoxicilina',
         proximo_disparo: '2026-10-24T12:00:00Z',
+        fecha: '2026-10-24',
       }),
     ]
     const text = exportIcs(alarmas, { tz, now })
@@ -76,10 +82,12 @@ describe('ics', () => {
     const parsed = importIcs(text, { tz })
     expect(parsed.errors).toEqual([])
     expect(parsed.alarmas).toEqual(
-      alarmas.map(({ titulo, tipo, hora, repeticion, destinatario, remedio }) => ({
+      alarmas.map(({ titulo, tipo, hora, repeticion, destinatario, remedio, fecha }) => ({
         titulo,
         tipo,
         hora,
+        // La fecha local de DTSTART viaja como `fecha` (alarma_creada.v3).
+        fecha,
         repeticion,
         ...(destinatario ? { destinatario } : {}),
         ...(remedio ? { remedio } : {}),
@@ -152,9 +160,38 @@ describe('ics', () => {
     ].join('\n')
     const parsed = importIcs(text, { tz })
     expect(parsed.alarmas).toEqual([
-      { titulo: 'Válida', tipo: 'otro', hora: '09:30', repeticion: { freq: 'DAILY', interval: 1 } },
+      {
+        titulo: 'Válida',
+        tipo: 'otro',
+        hora: '09:30',
+        fecha: '2026-10-23',
+        repeticion: { freq: 'DAILY', interval: 1 },
+      },
     ])
     expect(parsed.errors.map((error) => error.index)).toEqual([1, 2, 3, 4])
+  })
+
+  it('la fecha local de DTSTART viaja como `fecha`', () => {
+    const text = [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT',
+      'SUMMARY:Revisar facturación',
+      'DTSTART:20261114T160000',
+      'CATEGORIES:reunion',
+      'END:VEVENT',
+      'BEGIN:VEVENT',
+      'SUMMARY:En UTC',
+      'DTSTART:20261114T200000Z',
+      'CATEGORIES:otro',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\n')
+    const parsed = importIcs(text, { tz })
+    expect(parsed.errors).toEqual([])
+    expect(parsed.alarmas.map((alarma) => [alarma.hora, alarma.fecha])).toEqual([
+      ['16:00', '2026-11-14'],
+      ['16:00', '2026-11-14'],
+    ])
   })
 
   it('usa COUNT=restantes para una alarma con count a medio consumir', () => {
@@ -322,7 +359,13 @@ describe('ics', () => {
     ].join('\n')
     const parsed = importIcs(text, { tz })
     expect(parsed.alarmas).toEqual([
-      { titulo: 'Válida', tipo: 'otro', hora: '09:30', repeticion: { freq: 'DAILY', interval: 1 } },
+      {
+        titulo: 'Válida',
+        tipo: 'otro',
+        hora: '09:30',
+        fecha: '2026-10-23',
+        repeticion: { freq: 'DAILY', interval: 1 },
+      },
     ])
     expect(parsed.errors).toHaveLength(1)
     expect(parsed.errors[0]?.index).toBe(1)
@@ -346,6 +389,7 @@ describe('ics', () => {
         titulo: 'Toma',
         tipo: 'remedio',
         hora: '08:00',
+        fecha: '2026-10-23',
         repeticion: null,
         destinatario: 'Juan',
         remedio: 'Amoxicilina',

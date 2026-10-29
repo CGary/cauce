@@ -241,7 +241,14 @@ function veventToAlarma(props: Prop[], tz: string): BulkAlarma | string {
     if (typeof parsed === 'string') return parsed
     repeticion = parsed
   }
-  const entry: BulkAlarma = { titulo, tipo, hora: local.time.slice(0, 5), repeticion }
+  // La fecha local de DTSTART es la fecha de inicio del calendario (alarma_creada.v3).
+  const entry: BulkAlarma = {
+    titulo,
+    tipo,
+    hora: local.time.slice(0, 5),
+    fecha: local.date,
+    repeticion,
+  }
   const xDest = propValue(props, 'X-CAUCE-DESTINATARIO')
   const xRem = propValue(props, 'X-CAUCE-REMEDIO')
   const fromDesc = descriptionFields(propValue(props, 'DESCRIPTION'))

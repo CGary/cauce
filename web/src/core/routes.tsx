@@ -1,7 +1,7 @@
-import { Navigate, type RouteObject } from 'react-router'
+import { Link, Navigate, type RouteObject } from 'react-router'
 import type { FeatureModule } from './feature'
 import { Layout } from './layout'
-import { EmptyState, Page } from './ui'
+import { buttonClass, EmptyState, Page } from './ui'
 
 /** Una ruta por vista de proyección: /{feature}/{vista}. */
 export function buildRoutes(features: FeatureModule[]): RouteObject[] {
@@ -30,7 +30,12 @@ export function buildRoutes(features: FeatureModule[]): RouteObject[] {
             <Page title="No encontrado">
               <EmptyState
                 title="Esta página no existe"
-                description="Elegí una vista en la navegación."
+                description="Elegí una vista en la navegación o volvé al inicio."
+                action={
+                  <Link to="/" className={buttonClass('primary')}>
+                    Ir al inicio
+                  </Link>
+                }
               />
             </Page>
           ),

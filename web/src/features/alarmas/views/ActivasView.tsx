@@ -3,14 +3,17 @@ import { useState } from 'react'
 import { browserTimeZone, formatDateTime } from '../../../core/time'
 import { buildEvent, PushError, usePushEvents, uuidv7 } from '../../../core/push'
 import {
+  Button,
   Card,
   Chip,
+  Dialog,
   EmptyState,
   ErrorState,
   Page,
   SectionHeader,
   Spinner,
   Table,
+  buttonClass,
   type Column,
 } from '../../../core/ui'
 import { activasQuery, adherenciaQuery } from '../api'
@@ -32,11 +35,6 @@ import {
 } from '../model'
 import type { AlarmaActiva, AlarmaPayload } from '../types'
 import { AlarmaForm } from './AlarmaForm'
-
-const secondary =
-  'rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50 disabled:opacity-50'
-const danger =
-  'rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50'
 
 type Editing = { mode: 'crear' | 'editar'; alarmaId: string; initial: AlarmaFormState }
 
@@ -178,9 +176,7 @@ export default function ActivasView() {
       header: 'Acciones',
       render: (row) => (
         <div className="flex gap-2">
-          <button
-            type="button"
-            className={secondary}
+          <Button
             aria-label={`Editar ${row.titulo}`}
             disabled={!adherenciaReady}
             onClick={() => {
@@ -194,10 +190,8 @@ export default function ActivasView() {
             }}
           >
             Editar
-          </button>
-          <button
-            type="button"
-            className={secondary}
+          </Button>
+          <Button
             aria-label={`Eliminar ${row.titulo}`}
             onClick={() => {
               setEditing(null)
@@ -205,7 +199,7 @@ export default function ActivasView() {
             }}
           >
             Eliminar
-          </button>
+          </Button>
         </div>
       ),
     },
@@ -213,88 +207,117 @@ export default function ActivasView() {
 
   const rows = activas.data ?? []
 
+  function openCreate() {
+    setPendingDelete(null)
+    setEditing({ mode: 'crear', alarmaId: uuidv7(), initial: emptyForm() })
+  }
+
+  const pushError = push.isError && (
+    <p
+      role="alert"
+      className="rounded-control border border-danger bg-danger-soft px-4 py-3 font-medium text-danger-ink"
+    >
+      {pushText(push.error)}
+    </p>
+  )
+
   return (
     <Page
       title="Alarmas activas"
-      actions={
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-md bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
-            onClick={() => {
-              setPendingDelete(null)
-              setEditing({ mode: 'crear', alarmaId: uuidv7(), initial: emptyForm() })
-            }}
-          >
-            Nueva alarma
-          </button>
-          <button
-            type="button"
-            className={secondary}
-            disabled={rows.length === 0 || !adherenciaReady}
-            onClick={() =>
-              downloadText('alarmas.json', exportBulk(rowsToBulk(rows, extras)), 'application/json')
-            }
-          >
-            Exportar JSON
-          </button>
-          <button
-            type="button"
-            className={secondary}
-            disabled={rows.length === 0 || !adherenciaReady}
-            onClick={() =>
-              downloadText(
-                'alarmas.ics',
-                exportIcs(sources(rows), { tz, now: new Date().toISOString() }),
-                'text/calendar',
-              )
-            }
-          >
-            Exportar ICS
-          </button>
-          <label htmlFor="importar-json" className={secondary}>
-            Importar JSON
-            <input
-              id="importar-json"
-              type="file"
-              accept="application/json,.json"
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (file) void onImportJson(file)
-              }}
-            />
-          </label>
-          <label htmlFor="importar-ics" className={secondary}>
-            Importar ICS
-            <input
-              id="importar-ics"
-              type="file"
-              accept=".ics,text/calendar"
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (file) void onImportIcs(file)
-              }}
-            />
-          </label>
-          {!adherenciaReady && adherencia.isPending && (
-            <span role="status" className="self-center text-sm text-stone-600">
-              Cargando adherencia…
-            </span>
-          )}
-        </div>
-      }
+      description="Las alarmas que siguen sonando. Crealas, editalas o cargalas desde un archivo."
     >
-      <Card className="flex flex-col gap-4">
+      <div
+        role="toolbar"
+        aria-label="Acciones de alarmas"
+        className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+      >
+        <Button variant="primary" onClick={openCreate}>
+          Nueva alarma
+        </Button>
+        <span aria-hidden="true" className="hidden h-6 w-px bg-line sm:block" />
+        <Button
+          disabled={rows.length === 0 || !adherenciaReady}
+          onClick={() =>
+            downloadText('alarmas.json', exportBulk(rowsToBulk(rows, extras)), 'application/json')
+          }
+        >
+          Exportar JSON
+        </Button>
+        <Button
+          disabled={rows.length === 0 || !adherenciaReady}
+          onClick={() =>
+            downloadText(
+              'alarmas.ics',
+              exportIcs(sources(rows), { tz, now: new Date().toISOString() }),
+              'text/calendar',
+            )
+          }
+        >
+          Exportar ICS
+        </Button>
+        <span aria-hidden="true" className="hidden h-6 w-px bg-line sm:block" />
+        <label
+          htmlFor="importar-json"
+          className={buttonClass(
+            'secondary',
+            'focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-ring',
+          )}
+        >
+          Importar JSON
+          <input
+            id="importar-json"
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void onImportJson(file)
+            }}
+          />
+        </label>
+        <label
+          htmlFor="importar-ics"
+          className={buttonClass(
+            'secondary',
+            'focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-ring',
+          )}
+        >
+          Importar ICS
+          <input
+            id="importar-ics"
+            type="file"
+            accept=".ics,text/calendar"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void onImportIcs(file)
+            }}
+          />
+        </label>
+      </div>
+      <div role="status" aria-live="polite" className="flex flex-col gap-2 empty:hidden">
+        {!adherenciaReady && adherencia.isPending && (
+          <p className="text-caption text-muted">
+            Cargando adherencia… exportar y editar se habilitan al terminar.
+          </p>
+        )}
+        {notice && (
+          <p className="rounded-control border border-success bg-success-soft px-4 py-3 font-medium text-success-ink">
+            <span aria-hidden="true">✓ </span>
+            {notice}
+          </p>
+        )}
+      </div>
+      <Card className="flex flex-col gap-5">
         <SectionHeader
           title="Activas"
           description="Eliminar desactiva la alarma; no se borra, para que el historial de dosis se conserve."
         />
         {adherencia.isError && (
-          <p className="text-sm text-red-800">
+          <p className="rounded-control border border-warning bg-warning-soft px-4 py-3 text-warning-ink">
+            <span aria-hidden="true">▲ </span>
             No se pudo cargar la adherencia: exportar y editar quedan deshabilitados.
           </p>
         )}
@@ -303,7 +326,15 @@ export default function ActivasView() {
           <ErrorState error={activas.error} onRetry={() => void activas.refetch()} />
         )}
         {activas.isSuccess && rows.length === 0 && (
-          <EmptyState title="No hay alarmas activas" description="Creá una o importá un archivo." />
+          <EmptyState
+            title="No hay alarmas activas"
+            description="Creá una o importá un archivo."
+            action={
+              <Button variant="primary" onClick={openCreate}>
+                Crear la primera alarma
+              </Button>
+            }
+          />
         )}
         {activas.isSuccess && rows.length > 0 && (
           <Table
@@ -315,63 +346,76 @@ export default function ActivasView() {
         )}
       </Card>
       {pendingDelete && (
-        <Card className="flex flex-col gap-3">
-          <p>
-            Eliminar desactiva «{pendingDelete.titulo}». No se borra: el historial de dosis se
-            conserva.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className={danger}
-              disabled={push.isPending}
-              onClick={() =>
-                void send(
-                  [
-                    buildEvent('alarma_desactivada', desactivadaPayload(pendingDelete.alarma_id), {
-                      v: V_ALARMA_DESACTIVADA,
-                    }),
-                  ],
-                  'Alarma desactivada. La lista se actualiza al releer.',
-                )
-              }
-            >
-              Confirmar eliminación
-            </button>
-            <button type="button" className={secondary} onClick={() => setPendingDelete(null)}>
-              Cancelar
-            </button>
+        <Dialog
+          title={`¿Eliminar «${pendingDelete.titulo}»?`}
+          description="Eliminar desactiva la alarma; no se borra."
+          onClose={() => setPendingDelete(null)}
+        >
+          <div className="flex flex-col gap-5">
+            <p>
+              La alarma deja de sonar, pero el historial de dosis se conserva. Podés volver a
+              crearla cuando quieras.
+            </p>
+            {pushError}
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button data-autofocus onClick={() => setPendingDelete(null)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="danger"
+                pending={push.isPending}
+                onClick={() =>
+                  void send(
+                    [
+                      buildEvent(
+                        'alarma_desactivada',
+                        desactivadaPayload(pendingDelete.alarma_id),
+                        { v: V_ALARMA_DESACTIVADA },
+                      ),
+                    ],
+                    'Alarma desactivada. La lista se actualiza al releer.',
+                  )
+                }
+              >
+                Confirmar eliminación
+              </Button>
+            </div>
           </div>
-        </Card>
+        </Dialog>
       )}
       {editing && (
-        <Card>
-          <AlarmaForm
-            key={editing.alarmaId}
-            mode={editing.mode}
-            alarmaId={editing.alarmaId}
-            initial={editing.initial}
-            pending={push.isPending}
-            onSubmit={onSave}
-            onCancel={() => setEditing(null)}
-          />
-        </Card>
-      )}
-      {push.isError && (
-        <p
-          role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-900"
+        <Dialog
+          title={editing.mode === 'crear' ? 'Nueva alarma' : 'Editar alarma'}
+          description="Los cambios se guardan como un evento nuevo; el historial no se reescribe."
+          onClose={() => setEditing(null)}
         >
-          {pushText(push.error)}
-        </p>
+          <div className="flex flex-col gap-4">
+            <AlarmaForm
+              key={editing.alarmaId}
+              mode={editing.mode}
+              alarmaId={editing.alarmaId}
+              initial={editing.initial}
+              pending={push.isPending}
+              onSubmit={onSave}
+              onCancel={() => setEditing(null)}
+            />
+            {pushError}
+          </div>
+        </Dialog>
       )}
-      {notice && <p className="text-sm text-teal-800">{notice}</p>}
+      {!editing && !pendingDelete && pushError}
       {importErrors.length > 0 && (
-        <ul className="list-disc pl-5 text-sm text-red-800">
-          {importErrors.map((error) => (
-            <li key={error}>{error}</li>
-          ))}
-        </ul>
+        <div
+          role="alert"
+          className="rounded-control border border-danger bg-danger-soft px-4 py-3 text-danger-ink"
+        >
+          <p className="font-semibold">No se pudo importar todo el archivo</p>
+          <ul className="list-disc pl-5">
+            {importErrors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </Page>
   )

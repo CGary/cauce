@@ -6,6 +6,7 @@ export interface Column<T> {
   align?: 'left' | 'right'
 }
 
+/** Tabla en escritorio; en pantallas angostas cada fila se apila como tarjeta (ver .stack-table). */
 export function Table<T>({
   caption,
   columns,
@@ -19,15 +20,15 @@ export function Table<T>({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
+      <table className="stack-table text-body">
         <caption className="sr-only">{caption}</caption>
         <thead>
-          <tr className="border-b border-stone-200 text-left text-xs uppercase tracking-wide text-stone-500">
+          <tr className="border-b border-line-strong text-left text-caption text-muted">
             {columns.map((col) => (
               <th
                 key={col.header}
                 scope="col"
-                className={`px-3 py-2 font-medium ${col.align === 'right' ? 'text-right' : ''}`}
+                className={`px-3 py-2 font-semibold ${col.align === 'right' ? 'text-right' : ''}`}
               >
                 {col.header}
               </th>
@@ -36,11 +37,12 @@ export function Table<T>({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="border-b border-stone-100 last:border-0">
+            <tr key={rowKey(row)} className="border-b border-line last:border-0">
               {columns.map((col) => (
                 <td
                   key={col.header}
-                  className={`px-3 py-2 ${col.align === 'right' ? 'text-right tabular-nums' : ''}`}
+                  data-label={col.header}
+                  className={`px-3 py-3 align-middle ${col.align === 'right' ? 'text-right tabular-nums' : ''}`}
                 >
                   {col.render(row)}
                 </td>

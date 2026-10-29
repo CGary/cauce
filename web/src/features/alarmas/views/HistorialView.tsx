@@ -1,7 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { formatDateTime } from '../../../core/time'
-import { Card, Page, QueryState, SectionHeader, Table, type Column } from '../../../core/ui'
+import {
+  Button,
+  Card,
+  Field,
+  Page,
+  QueryState,
+  SectionHeader,
+  Table,
+  inputClass,
+  type Column,
+} from '../../../core/ui'
 import { historialQuery } from '../api'
 import type { HistorialDosis } from '../types'
 
@@ -18,32 +28,35 @@ export default function HistorialView() {
   const query = useQuery(historialQuery({ destinatario: destinatario || undefined }))
 
   return (
-    <Page title="Historial de dosis">
-      <Card className="flex flex-col gap-4">
+    <Page
+      title="Historial de dosis"
+      description="Cada dosis registrada como dada, con la fecha en tu zona horaria."
+    >
+      <Card className="flex flex-col gap-5">
         <SectionHeader title="Dosis dadas" description="Las más recientes primero.">
           <form
-            className="flex items-center gap-2 text-sm"
+            className="flex items-end gap-2"
             onSubmit={(e) => {
               e.preventDefault()
               const value = String(new FormData(e.currentTarget).get('destinatario') ?? '').trim()
               setSearch(value ? { destinatario: value } : {})
             }}
           >
-            <label htmlFor="historial-destinatario">Destinatario</label>
-            <input
-              id="historial-destinatario"
-              name="destinatario"
-              defaultValue={destinatario}
-              key={destinatario}
-              placeholder="Todos"
-              className="w-36 rounded-md border border-stone-300 bg-white px-2 py-1"
-            />
-            <button
-              type="submit"
-              className="rounded-md bg-teal-700 px-3 py-1 font-medium text-white hover:bg-teal-800"
-            >
+            <Field label="Destinatario" className="w-full sm:w-52">
+              {(c) => (
+                <input
+                  {...c}
+                  name="destinatario"
+                  defaultValue={destinatario}
+                  key={destinatario}
+                  placeholder="Todos"
+                  className={inputClass}
+                />
+              )}
+            </Field>
+            <Button type="submit" variant="primary">
               Filtrar
-            </button>
+            </Button>
           </form>
         </SectionHeader>
         <QueryState

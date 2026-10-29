@@ -10,10 +10,10 @@ export function SectionHeader({
   children?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {description && <p className="text-sm text-stone-600">{description}</p>}
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-heading font-semibold">{title}</h2>
+        {description && <p className="max-w-prose text-caption text-muted">{description}</p>}
       </div>
       {children}
     </div>

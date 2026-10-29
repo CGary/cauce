@@ -1,1 +1,234 @@
 @import 'tailwindcss';
+
+/*
+ * Sistema de diseño de Cauce: un cauce sereno. Verde azulado de agua en calma,
+ * superficies neutras con un matiz frío y semánticos discretos.
+ * Los valores viven una sola vez como variables; @theme los expone como utilidades
+ * (bg-surface, text-muted, border-line, bg-primary, rounded-card, shadow-card…).
+ * Contraste objetivo: WCAG 2.2 AA (texto >= 4.5:1, controles y foco >= 3:1).
+ */
+:root {
+  color-scheme: light;
+
+  --canvas: #f3f7f7;
+  --surface: #ffffff;
+  --surface-2: #e9f0f0;
+  --line: #cbd9d9;
+  --line-strong: #6a8487;
+  --text: #12292c;
+  --muted: #465f62;
+
+  --primary: #0e656d;
+  --primary-hover: #0a5158;
+  --on-primary: #ffffff;
+  --primary-soft: #dcf0f0;
+  --primary-ink: #0a4a50;
+
+  --success: #1a7340;
+  --success-soft: #dff3e6;
+  --success-ink: #115330;
+  --warning: #8a5300;
+  --warning-soft: #fcefcf;
+  --warning-ink: #6b4000;
+  --danger: #b0261d;
+  --danger-hover: #8f1e17;
+  --on-danger: #ffffff;
+  --danger-soft: #fce6e3;
+  --danger-ink: #88201a;
+  --info: #1d5c96;
+  --info-soft: #e1eefa;
+  --info-ink: #164873;
+
+  --ring: #0b7a85;
+  --scrim: rgb(10 30 33 / 0.55);
+  --shadow-color: 18 60 66;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --canvas: #0b1618;
+    --surface: #112226;
+    --surface-2: #18323a;
+    --line: #2a4750;
+    --line-strong: #6f9096;
+    --text: #e3efee;
+    --muted: #a0b9bb;
+
+    --primary: #52c4c8;
+    --primary-hover: #74d3d6;
+    --on-primary: #04262a;
+    --primary-soft: #12383d;
+    --primary-ink: #93dfe1;
+
+    --success: #62d08c;
+    --success-soft: #11341f;
+    --success-ink: #92e5b0;
+    --warning: #f0b84a;
+    --warning-soft: #392a08;
+    --warning-ink: #f6d083;
+    --danger: #f27b72;
+    --danger-hover: #f59a92;
+    --on-danger: #2a0907;
+    --danger-soft: #3b1411;
+    --danger-ink: #fbaca5;
+    --info: #78b6ee;
+    --info-soft: #11293f;
+    --info-ink: #a8d2f6;
+
+    --ring: #74d3d6;
+    --scrim: rgb(0 0 0 / 0.65);
+    --shadow-color: 0 0 0;
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-ink: var(--success-ink);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-ink: var(--warning-ink);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-on-danger: var(--on-danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-ink: var(--danger-ink);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-ink: var(--info-ink);
+  --color-scrim: var(--scrim);
+
+  --shadow-card:
+    0 1px 2px rgb(var(--shadow-color) / 0.06), 0 2px 8px rgb(var(--shadow-color) / 0.05);
+  --shadow-overlay: 0 12px 40px rgb(var(--shadow-color) / 0.28);
+}
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+
+  /* Escala tipográfica */
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.25rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.5rem;
+  --text-heading: 1.25rem;
+  --text-heading--line-height: 1.75rem;
+  --text-title: 1.75rem;
+  --text-title--line-height: 2.25rem;
+
+  /* Radios */
+  --radius-control: 0.625rem;
+  --radius-card: 1rem;
+
+  /* Ancho de lectura de la página */
+  --container-page: 68rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5rem;
+    overflow-wrap: anywhere;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--primary-soft);
+    color: var(--primary-ink);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Tabla que en pantallas angostas se apila como tarjetas (cada celda lleva data-label). */
+  .stack-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  @media (max-width: 47.99rem) {
+    .stack-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    .stack-table,
+    .stack-table tbody,
+    .stack-table tr,
+    .stack-table td {
+      display: block;
+    }
+
+    .stack-table tr {
+      margin-bottom: 0.75rem;
+      padding: 0.5rem 0.875rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-control);
+      background: var(--surface);
+    }
+
+    .stack-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.5rem 0;
+      border: 0;
+      text-align: right;
+    }
+
+    .stack-table td + td {
+      border-top: 1px dashed var(--line);
+    }
+
+    .stack-table td::before {
+      content: attr(data-label);
+      flex: none;
+      color: var(--muted);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      text-align: left;
+    }
+  }
+}

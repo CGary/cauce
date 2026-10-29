@@ -33,13 +33,13 @@ Cómo se aprovisionó (scripts idempotentes, repo `Scriptorium` en `pc-gary`): `
 
 ## Cloudflare (cuenta creada el 2026-10-25)
 
-- Credenciales: `cloudflare.api_token` y `cloudflare.account_id` en `~/fleet/secrets/main.yaml` de `pc-gary` (sops). Se usan **solo desde `pc-gary`**, inyectadas por comando (`CLOUDFLARE_API_TOKEN=$(sops -d --extract '["cloudflare"]["api_token"]' ~/fleet/secrets/main.yaml) wrangler …`). Nunca van al servidor, al repo ni al chat.
-- La consola `web/` se publica en **Cloudflare Pages** (proyecto `cauce-web`, URL `cauce-web.pages.dev` hasta tener dominio); sin integración GitHub. Desde `pc-gary`, con `CF=$(sops -d --extract '["cloudflare"]["api_token"]' ~/fleet/secrets/main.yaml)`:
+- Credenciales: `cloudflare.api_token` y `cloudflare.account_id` en `~/fleet/secrets/main.yaml` (sops), presente en `pc-gary` y en el servidor `optiplex`. Se pueden usar desde **cualquiera de los dos**, siempre inyectadas por comando (`CLOUDFLARE_API_TOKEN=$(sops -d --extract '["cloudflare"]["api_token"]' ~/fleet/secrets/main.yaml) wrangler …`). Nunca se escriben descifradas en disco, en el repo, en `.env` ni en el chat.
+- La consola `web/` se publica en **Cloudflare Pages** (proyecto `cauce-web`, URL `cauce-web-2dr.pages.dev` hasta tener dominio); sin integración GitHub. Desde `pc-gary` u `optiplex`, con `CF=$(sops -d --extract '["cloudflare"]["api_token"]' ~/fleet/secrets/main.yaml)`:
   1. `npm i -g wrangler` si `command -v wrangler` falla (Node 22 ya está vía fnm).
   2. Una vez: `CLOUDFLARE_API_TOKEN=$CF wrangler pages project create cauce-web --production-branch main`.
   3. `web/public/_redirects` con `/* /index.html 200` (rutas de la SPA); `cd web && VITE_API_BASE=<URL pública de la API> npm run build`.
   4. `CLOUDFLARE_API_TOKEN=$CF wrangler pages deploy web/dist --project-name cauce-web`.
-- **CORS**: la SPA (`https://cauce-web.pages.dev`) y la API están en orígenes distintos. Si el servidor Go aún no responde CORS, es un cambio en `server/internal/core/` (middleware con origen permitido por variable de entorno, p. ej. `CAUCE_CORS_ORIGIN`, documentada en `server/.env.example`). Este encargo **autoriza explícitamente** ese cambio de core; decirlo en el resumen.
+- **CORS**: la SPA (`https://cauce-web-2dr.pages.dev`) y la API están en orígenes distintos. Si el servidor Go aún no responde CORS, es un cambio en `server/internal/core/` (middleware con origen permitido por variable de entorno, p. ej. `CAUCE_CORS_ORIGIN`, documentada en `server/.env.example`). Este encargo **autoriza explícitamente** ese cambio de core; decirlo en el resumen.
 - **URL pública de la API hasta tener dominio**: preferir Tailscale Funnel (fija): el dueño habilita *Funnel* y *HTTPS certificates* en la consola de Tailscale (acción humana, pedirla), luego en el servidor `sudo tailscale funnel --bg 8080` → `https://optiplex.<tailnet>.ts.net` (el nombre exacto lo imprime `tailscale funnel status`; no escribirlo en el repo). Si no está habilitado, usar la URL de `tunnel-url` (cambia en cada reinicio del servicio) y avisar.
 - Litestream/R2, Pages y whisper.cpp quedan fuera de este encargo.
 

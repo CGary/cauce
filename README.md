@@ -46,6 +46,7 @@ Repositorio recién inicializado. El código de `android/`, `server/` y `web/` t
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — local-first, event log, sync, blobs, workers.
 - [`docs/INFRA.md`](docs/INFRA.md) — PC viejo, Cloudflare Tunnel/Access/R2/Pages, Litestream, whisper.cpp.
 - [`docs/DEPLOY-OPTIPLEX.md`](docs/DEPLOY-OPTIPLEX.md) — encargo: estado del servidor `optiplex` y pasos para desplegar ahí.
+- [`docs/ALARMAS-COMO-RELOJ.md`](docs/ALARMAS-COMO-RELOJ.md) — encargo: alarmas a la hora exacta, en silencio y sobre el bloqueo, como el reloj del sistema.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — decisiones de diseño y su porqué.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — orden de construcción.
 

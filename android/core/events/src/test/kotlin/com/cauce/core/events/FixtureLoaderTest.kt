@@ -1,12 +1,13 @@
 package com.cauce.core.events
 
 import com.cauce.feature.alarmas.AlarmasFeatureModule
+import com.cauce.feature.calendariogoogle.CalendarioGoogleFeatureModule
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /** The test-only feature list. Adding a feature here puts its fixtures under conformance. */
 internal object TestFeatures {
-    val modules: List<FeatureModule> = listOf(AlarmasFeatureModule())
+    val modules: List<FeatureModule> = listOf(AlarmasFeatureModule(), CalendarioGoogleFeatureModule())
 }
 
 class FixtureLoaderTest {

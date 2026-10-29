@@ -103,6 +103,7 @@ Convenciones: todo `datetime` es RFC 3339 en UTC (`...Z`). La zona local entra c
 - La derivación de `aviso_en` (§4) se repite en `alarmas`, porque los features solo se hablan por eventos. Es una regla corta; los fixtures de ambos lados la cubren.
 - Una cuenta quitada del teléfono no tiene evento propio: sus reuniones se registran como `reunion_eliminada_en_origen` una por una (2.8).
 - "Eliminar" aquí es dejar de ver: no hay borrado. Para dejar de ver una reunión concreta se apaga su aviso; para dejar de ver un calendario entero se oculta en Android.
+- (agente) En el servidor, un aviso editado se aplica tal como está escrito aunque no case con el tipo de reunión: `hora` en una reunión con hora usa esa hora local del día local de `inicio`, y `minutos_antes` en una de todo el día resta esos minutos a la medianoche UTC de `inicio`; igual que en `alarmas`.
 
 ## 9. Changelog
 

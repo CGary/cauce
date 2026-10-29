@@ -97,4 +97,5 @@ dependencies {
     testImplementation(libs.junit)
     // Test-only aggregation: the conformance runner dispatches through every feature's projections.
     testImplementation(project(":feature:alarmas"))
+    testImplementation(project(":feature:calendario_google"))
 }

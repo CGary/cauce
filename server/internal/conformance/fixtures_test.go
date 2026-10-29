@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"cauce/server/internal/alarmas"
+	"cauce/server/internal/calendario_google"
 	"cauce/server/internal/conformance"
 	"cauce/server/internal/core/event"
 	"cauce/server/internal/core/projection"
@@ -31,6 +32,7 @@ func TestContractFixtures(t *testing.T) {
 	// Feature packages register their projections here (/feature <id>).
 	registry := projection.NewRegistry()
 	registry.MustRegister(alarmas.Projections()...)
+	registry.MustRegister(calendario_google.Projections()...)
 
 	for feature, files := range cases {
 		feature, files := feature, files

@@ -18,6 +18,7 @@ import (
 	"cauce/server/internal/alarmas"
 	"cauce/server/internal/auth"
 	"cauce/server/internal/blobs"
+	"cauce/server/internal/calendario_google"
 	"cauce/server/internal/config"
 	"cauce/server/internal/core/cors"
 	"cauce/server/internal/core/event"
@@ -98,6 +99,7 @@ func run() error {
 	// Feature packages register their projections here (/feature <id>).
 	registry := projection.NewRegistry()
 	registry.MustRegister(alarmas.Projections()...)
+	registry.MustRegister(calendario_google.Projections()...)
 
 	pusher := &syncapi.Pusher{Store: st, Validator: validator}
 	puller := &syncapi.Puller{Store: st}

@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cauce/events/alarma_modificada.v3.json",
+  "title": "alarma_modificada",
+  "description": "Se reemplazó el estado completo de una alarma existente (no es un diff). Puede venir de la app o de la web. Feature dueño: alarmas. v3 = v2 más `fecha` opcional: la fecha local del primer disparo (ancla del calendario) en vez de la primera ocurrencia de `hora` posterior a la creación.",
+  "type": "object",
+  "required": [
+    "alarma_id",
+    "titulo",
+    "tipo",
+    "hora",
+    "repeticion"
+  ],
+  "properties": {
+    "alarma_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "titulo": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "remedio",
+        "reunion",
+        "otro"
+      ]
+    },
+    "hora": {
+      "type": "string",
+      "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+      "description": "Hora local del primer disparo del día, HH:MM."
+    },
+    "fecha": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+      "description": "Opcional. Fecha local del primer disparo (AAAA-MM-DD). Sin ella, el primer disparo es la primera ocurrencia de `hora` posterior al ts de creación."
+    },
+    "repeticion": {
+      "$ref": "#/$defs/repeticion"
+    },
+    "destinatario": {
+      "type": "string",
+      "maxLength": 60,
+      "description": "Solo tipo remedio. Texto libre."
+    },
+    "remedio": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Solo tipo remedio."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "tipo": {
+            "const": "remedio"
+          }
+        },
+        "required": [
+          "tipo"
+        ]
+      },
+      "then": {
+        "required": [
+          "destinatario",
+          "remedio"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "repeticion": {
+      "description": "Subconjunto estricto de RRULE (RFC 5545 §3.3.10). null = una sola vez.",
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "freq"
+          ],
+          "properties": {
+            "freq": {
+              "type": "string",
+              "enum": [
+                "DAILY",
+                "WEEKLY",
+                "MONTHLY",
+                "HOURLY"
+              ]
+            },
+            "interval": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "description": "Cada cuántas unidades (días, semanas, meses u horas según freq). 1 si se omite."
+            },
+            "byday": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(-1|[1-5])?(MO|TU|WE|TH|FR|SA|SU)$"
+              },
+              "description": "Días de la semana. WEEKLY: sin ordinal, uno o más (MO..SU). MONTHLY: exactamente uno, con ordinal 1..5 (n-ésimo) o -1 (último), p. ej. 1MO, -1FR."
+            },
+            "bymonthday": {
+              "type": "integer",
+              "minimum": -1,
+              "maximum": 31,
+              "not": {
+                "const": 0
+              },
+              "description": "Día del mes (1..31) o -1 = último día. Solo MONTHLY. Un mes sin ese día se salta."
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Cantidad total de disparos, primero incluido."
+            },
+            "until": {
+              "type": "string",
+              "format": "date",
+              "description": "Última fecha local (inclusive) en que puede haber disparo."
+            }
+          },
+          "allOf": [
+            {
+              "not": {
+                "required": [
+                  "count",
+                  "until"
+                ]
+              }
+            },
+            {
+              "not": {
+                "required": [
+                  "byday",
+                  "bymonthday"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "bymonthday"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "freq": {
+                    "const": "MONTHLY"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "byday"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "freq": {
+                    "enum": [
+                      "WEEKLY",
+                      "MONTHLY"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "freq": {
+                    "const": "WEEKLY"
+                  }
+                },
+                "required": [
+                  "byday"
+                ]
+              },
+              "then": {
+                "properties": {
+                  "byday": {
+                    "items": {
+                      "pattern": "^(MO|TU|WE|TH|FR|SA|SU)$"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "freq": {
+                    "const": "MONTHLY"
+                  }
+                }
+              },
+              "then": {
+                "oneOf": [
+                  {
+                    "required": [
+                      "byday"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "bymonthday"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "byday": {
+                    "maxItems": 1,
+                    "items": {
+                      "pattern": "^(-1|[1-5])(MO|TU|WE|TH|FR|SA|SU)$"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "projection": "alarmas.alarmas_activas",
+  "params": {
+    "now": "2026-11-02T12:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 3,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "alarma_id": "p1",
+        "titulo": "Revisar facturación con Lucas",
+        "tipo": "reunion",
+        "hora": "16:00",
+        "repeticion": null,
+        "fecha": "2026-11-14"
+      }
+    },
+    {
+      "id": "e2",
+      "type": "alarma_creada",
+      "v": 3,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "alarma_id": "p2",
+        "titulo": "Ya pasó",
+        "tipo": "otro",
+        "hora": "16:00",
+        "repeticion": null,
+        "fecha": "2026-10-30"
+      }
+    },
+    {
+      "id": "e3",
+      "type": "alarma_creada",
+      "v": 3,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "alarma_id": "w1",
+        "titulo": "Checkout",
+        "tipo": "reunion",
+        "hora": "15:00",
+        "repeticion": {
+          "freq": "WEEKLY",
+          "byday": [
+            "FR"
+          ]
+        },
+        "fecha": "2026-11-13"
+      }
+    },
+    {
+      "id": "e4",
+      "type": "alarma_creada",
+      "v": 2,
+      "ts": "2026-11-01T20:00:00Z",
+      "payload": {
+        "alarma_id": "v2",
+        "titulo": "Sin fecha (v2)",
+        "tipo": "otro",
+        "hora": "09:00",
+        "repeticion": {
+          "freq": "DAILY"
+        }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "v2",
+      "titulo": "Sin fecha (v2)",
+      "tipo": "otro",
+      "hora": "09:00",
+      "repeticion": {
+        "freq": "DAILY"
+      },
+      "proximo_disparo": "2026-11-02T13:00:00Z"
+    },
+    {
+      "alarma_id": "w1",
+      "titulo": "Checkout",
+      "tipo": "reunion",
+      "hora": "15:00",
+      "repeticion": {
+        "freq": "WEEKLY",
+        "byday": [
+          "FR"
+        ]
+      },
+      "proximo_disparo": "2026-11-13T19:00:00Z"
+    },
+    {
+      "alarma_id": "p1",
+      "titulo": "Revisar facturación con Lucas",
+      "tipo": "reunion",
+      "hora": "16:00",
+      "repeticion": null,
+      "proximo_disparo": "2026-11-14T20:00:00Z"
+    }
+  ]
+}

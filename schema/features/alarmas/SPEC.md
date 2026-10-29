@@ -13,22 +13,25 @@ Las alarmas del reloj del teléfono no saben *para qué* suenan: no registran si
 
 ## 2. Proceso de negocio
 
-1. Una alarma tiene título, hora, tipo (`remedio` | `reunion` | `otro`) y repetición: `null` (una sola vez) o un subconjunto de RRULE de RFC 5545: `DAILY`, `WEEKLY` (con días), `MONTHLY` u `HOURLY`, con `interval`, y límite por `count` o por `until` (excluyentes entre sí). Uso típico: "cada 8 h por 5 días" se escribe `HOURLY` `interval 8` `count 15`.
+1. Una alarma tiene título, hora, fecha de inicio opcional (para un compromiso puntual, "el martes 16:00 revisar la facturación", o para una serie que empieza en una fecha concreta), tipo (`remedio` | `reunion` | `otro`) y repetición: `null` (una sola vez) o un subconjunto de RRULE de RFC 5545: `DAILY`, `WEEKLY` (con días), `MONTHLY` u `HOURLY`, con `interval`, y límite por `count` o por `until` (excluyentes entre sí). Uso típico: "cada 8 h por 5 días" se escribe `HOURLY` `interval 8` `count 15`.
    - `MONTHLY` admite exactamente una de dos formas: un día del mes (`bymonthday`: `1..31`, o `-1` = último día) o un día de la semana con ordinal (`byday` con un solo valor `1MO`..`5SU` o `-1MO`..`-1SU`, p. ej. "primer lunes" = `1MO`, "último viernes" = `-1FR`). Si el día no existe en un mes (`bymonthday 31` en abril, `5MO` en un mes con cuatro lunes), ese mes no dispara: se salta, como en RFC 5545 y Google Calendar.
 2. Las alarmas de tipo `remedio` tienen un destinatario (texto libre, p. ej. el nombre de la persona a cargo) y el nombre del remedio.
 3. Al sonar, la alarma muestra pantalla completa aunque el teléfono esté bloqueado, con dos acciones: **Hecho** y **Posponer 10 min**. Suena y vibra hasta que se atiende o pasan 2 minutos (→ queda `ignorada`).
 4. **Hecho** en una alarma `remedio` registra una dosis (→ P2). En los demás tipos solo cierra la alarma.
 5. Se puede posponer hasta 3 veces; a la cuarta, la alarma se marca `ignorada`.
 6. Una alarma cuyo calendario tiene fin (`count` o `until`) se desactiva sola después de su último disparo (→ `alarma_desactivada`, motivo `fin_tratamiento`). Una alarma sin repetición (`null`) se desactiva al atenderse (motivo `una_vez_atendida`).
-7. Las alarmas sobreviven al reinicio del teléfono: al arrancar, la app reprograma todas las activas (→ P1). Además, tras un pull de sync que traiga `alarma_creada`, `alarma_modificada` o `alarma_desactivada`, la app recomputa P1 y reprograma: si no, una alarma creada en la web nunca sonaría.
+7. Las alarmas sobreviven al reinicio del teléfono: al arrancar, la app reprograma todas las activas (→ P1). Además, tras un pull de sync que traiga `alarma_creada`, `alarma_modificada`, `alarma_desactivada`, `reunion_sincronizada`, `reunion_eliminada_en_origen` o `aviso_reunion_editado`, la app recomputa P1 y reprograma: si no, una alarma creada en la web (o un aviso editado allí) nunca sonaría.
 8. Una alarma desactivada no se borra: su historial de dosis sigue visible.
 9. La web es consola de administración: crea, edita, desactiva y carga en bloque alarmas. Sus eventos entran por el sync genérico (`POST /sync/push`, `device_id: "web"`); el teléfono los recibe en el próximo pull (cada 15 min, al abrir la app o con el botón Sincronizar).
+10. Las reuniones de Google que trae `calendario_google` también suenan aquí, como alarmas de tipo `reunion` de un solo disparo (→ P1): el disparo es el `aviso_en` que define esa spec (recordatorio heredado de Google, editado en cauce o 10 min antes). Se atienden igual que cualquier alarma (reglas 3 y 5). No se crean, editan ni desactivan desde `alarmas`: su aviso se edita en `calendario_google` y desaparecen solas cuando pasa el aviso o cuando la reunión se elimina en Google.
 
 ## 3. Eventos
 
 | Tipo | v | Productor | Campos (además de `id`, `user_id`, `ts`, `device_id`) |
 |------|---|-----------|-------------------------------------------------------|
+| `alarma_creada` | 3 | app, web | como v2 más `fecha: "AAAA-MM-DD"?` (fecha local del primer disparo; §4). v3 es la versión que se produce desde la spec v5; v2 se sigue leyendo. |
 | `alarma_creada` | 2 | app, web | `alarma_id: uuid`, `titulo: string`, `tipo: enum`, `hora: "HH:MM"`, `repeticion: null (una vez) o RRULE { freq: DAILY\|WEEKLY\|MONTHLY\|HOURLY, interval?, byday? (WEEKLY: MO..SU; MONTHLY: un solo valor con ordinal, 1MO..5SU o -1MO..-1SU), bymonthday? (solo MONTHLY: 1..31 o -1; excluyente con byday), count? o until? }`, `destinatario: string?`, `remedio: string?` |
+| `alarma_modificada` | 3 | app, web | como v2 más `fecha?` (estado completo) |
 | `alarma_modificada` | 2 | app, web | `alarma_id`, mismos campos que `alarma_creada` (estado completo, no diff) |
 | `alarma_desactivada` | 1 | app, web | `alarma_id`, `motivo: enum(usuario, fin_tratamiento, una_vez_atendida)` |
 | `alarma_disparada` | 1 | app | `alarma_id`, `programada_para: datetime` |
@@ -39,13 +42,15 @@ Las alarmas del reloj del teléfono no saben *para qué* suenan: no registran si
 
 | Tipo | Feature dueño | Para qué |
 |------|---------------|----------|
-| Ninguno | | |
+| `reunion_sincronizada` | `calendario_google` | cada reunión próxima con aviso futuro es una entrada de P1 (2.10) |
+| `reunion_eliminada_en_origen` | `calendario_google` | la reunión deja de aparecer en P1 (2.10) |
+| `aviso_reunion_editado` | `calendario_google` | el aviso editado define el disparo de la serie (2.10) |
 
 ## 4. Proyecciones
 
 Convenciones comunes a las tres: todo `datetime` de entrada y salida es RFC 3339 en UTC (`...Z`). `hora` y `until` son locales; la zona entra como `params.tz` (IANA, p. ej. `America/La_Paz`). El estado vigente de una alarma es el último evento entre `alarma_creada` y `alarma_modificada` ordenado por `ts` (así el que venga de la web pisa al de la app y viceversa).
 
-**Calendario de disparos** (usado por P1 y P2): el primer disparo es la primera ocurrencia de `hora` estrictamente posterior al `ts` del `alarma_creada`. Luego:
+**Calendario de disparos** (usado por P1 y P2): el **ancla** es el `ts` del `alarma_creada` o, si el estado vigente trae `fecha`, el instante `fecha` a `hora` local. Sin `fecha`, el primer disparo es la primera ocurrencia de `hora` estrictamente posterior al ancla. Con `fecha`, el primer disparo es la primera ocurrencia de `hora` igual o posterior al ancla que cumpla la regla de la repetición (`fecha` misma si cae en un día válido): una alarma puntual (`repeticion: null`) con `fecha` dispara ese día aunque falten semanas, y una serie con `fecha` cuenta semanas, meses, `count` y `until` desde ahí. Las reglas de abajo dicen "posterior al `ts`"; léase "posterior al ancla". Luego:
 - `repeticion: null`: solo ese disparo.
 - `DAILY`: cada `interval` días (`1` si se omite) a `hora`.
 - `WEEKLY` (alineado con RFC 5545, `WKST=MO`): el primer disparo es la primera ocurrencia de `hora` estrictamente posterior al `ts` del `alarma_creada` que caiga en un día listado en `byday`. Sin `byday`, el primer disparo es la primera ocurrencia de `hora` posterior al `ts`, y solo cuenta su día de la semana. Con `interval`, `interval` cuenta semanas del calendario ISO (las semanas empiezan el lunes): solo disparan las semanas que distan un múltiplo de `interval` de la semana que contiene el primer disparo. Ejemplo: alarma creada el viernes 2026-10-23 10:00 local con `hora 08:00`, `byday ["FR"]`, `interval 2` → primer disparo viernes 30-10 08:00, siguiente viernes 13-11 08:00 (caso_07).
@@ -57,10 +62,11 @@ Convenciones comunes a las tres: todo `datetime` de entrada y salida es RFC 3339
 Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en `byday` de `MONTHLY`, `bymonthday` fuera de `MONTHLY`, …) queda fuera de alcance.
 
 ### P1. `alarmas_activas`
-- **Entrada:** `alarma_creada`, `alarma_modificada`, `alarma_desactivada`
+- **Entrada:** `alarma_creada`, `alarma_modificada`, `alarma_desactivada`, y los consumidos `reunion_sincronizada`, `reunion_eliminada_en_origen`, `aviso_reunion_editado`
 - **Params:** `now`, `tz`
-- **Salida:** `[{ alarma_id, titulo, tipo, hora, repeticion, proximo_disparo: datetime, restantes?: int }]` ordenado por `proximo_disparo` asc.
-- **Reglas:** 2.1, 2.6, 2.7. Una alarma aparece si no tiene `alarma_desactivada` y su calendario tiene al menos un disparo estrictamente posterior a `now`; ese disparo es `proximo_disparo`.
+- **Salida:** `[{ alarma_id, titulo, tipo, hora, repeticion, proximo_disparo: datetime, restantes?: int }]` ordenado por `proximo_disparo` asc; empates por `alarma_id`.
+- **Reglas:** 2.1, 2.6, 2.7, 2.10. Una alarma aparece si no tiene `alarma_desactivada` y su calendario tiene al menos un disparo estrictamente posterior a `now`; ese disparo es `proximo_disparo`.
+- **Reuniones de Google (2.10):** por cada reunión vigente según la spec de `calendario_google` §4 (último evento por `ts` entre `reunion_sincronizada` y `reunion_eliminada_en_origen`; `estado: confirmada`; `respuesta` distinta de `rechazada`) cuyo `aviso_en` (misma regla, aplicada tal cual: editado > todo el día 08:00 > recordatorio de Google > 10 min) es estrictamente posterior a `now`, P1 agrega `{ alarma_id: "gcal:" + reunion_id, titulo, tipo: "reunion", hora: HH:MM local de aviso_en, repeticion: null, proximo_disparo: aviso_en }`, sin `restantes`. Un aviso `apagado` o ya pasado no aparece. Estas entradas no tienen `alarma_creada` ni `alarma_desactivada`; `alarma_disparada` y `alarma_atendida` las referencian por ese `alarma_id`.
 - `restantes`: número de disparos del calendario con instante `>= proximo_disparo`, contando `proximo_disparo` mismo. Se incluye solo cuando `repeticion.count` está definido; en los demás casos la clave se omite (no es `null`). Una alarma cuyo calendario terminó no aparece en P1.
 
 ### P2. `adherencia_tratamiento`
@@ -78,8 +84,8 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 ## 5. Superficies
 
 ### Android
-- **Pantallas:** lista de alarmas activas (P1) con toggle; editor de alarma (la repetición "Mensual" ofrece dos modos: "día N del mes" con opción "último día", y "N-ésimo día de la semana" con opción "último", 2.1); historial de dosis por destinatario (P3).
-- **Al recibir eventos por sync:** tras un pull que traiga `alarma_creada`, `alarma_modificada` o `alarma_desactivada` (incluidos los emitidos por la web con `device_id: "web"`), la app recomputa P1 y reprograma las alarmas del sistema (2.7).
+- **Pantallas:** lista de alarmas activas (P1) con toggle; editor con fecha de inicio opcional (selector de fecha; vacío = "desde ahora") (las entradas `gcal:` se muestran con la cuenta/origen y sin toggle ni editor: su aviso se edita en la pantalla de reuniones de `calendario_google`, 2.10); editor de alarma (la repetición "Mensual" ofrece dos modos: "día N del mes" con opción "último día", y "N-ésimo día de la semana" con opción "último", 2.1); historial de dosis por destinatario (P3).
+- **Al recibir eventos por sync:** tras un pull que traiga `alarma_creada`, `alarma_modificada`, `alarma_desactivada`, `reunion_sincronizada`, `reunion_eliminada_en_origen` o `aviso_reunion_editado` (incluidos los emitidos por la web con `device_id: "web"`), la app recomputa P1 y reprograma las alarmas del sistema (2.7, 2.10).
 - **Notificaciones / servicios:** `AlarmManager.setAlarmClock` por disparo y por posposición (no se alinea, saca al teléfono de Doze y muestra el ícono de alarma); el timeout de 2 min queda además como respaldo con `setExactAndAllowWhileIdle`. `BroadcastReceiver` para el disparo, que arranca un servicio en primer plano (`systemExempted`) que reproduce el tono de alarma por defecto y la vibración en bucle por `USAGE_ALARM` (no respeta el modo silencio y No molestar lo deja pasar por defecto), con `WakeLock` parcial. El servicio corta a los 2 minutos (→ `ignorada`), al pulsar Hecho o Posponer y cuando aparece un `alarma_atendida` terminal; con varias alarmas a la vez suena mientras quede alguna sin atender. La notificación no tiene sonido propio (canal silencioso): es la del servicio, con `fullScreenIntent` y acciones Hecho/Posponer. La pantalla de alarma se muestra sobre el bloqueo con `showWhenLocked` y `turnScreenOn`, sin pedir desbloquear; Hecho y Posponer funcionan bloqueado. Receiver de `BOOT_COMPLETED` que reprograma desde P1.
 - **Permisos:**
   - `SCHEDULE_EXACT_ALARM` (solo hasta API 32) — alarmas exactas; en Android 13+ lo reemplaza `USE_EXACT_ALARM`.
@@ -98,7 +104,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - **Workers:** ninguno.
 
 ### Web
-- **Vistas:** las mismas que la app: alarmas activas (P1), adherencia (P2) e historial de dosis (P3).
+- **Vistas:** las mismas que la app: alarmas activas (P1, con las entradas `gcal:` de solo lectura), adherencia (P2) e historial de dosis (P3).
 - **Acciones de admin:** crear (`alarma_creada`), editar (`alarma_modificada`, con el estado completo) y **Eliminar** (`alarma_desactivada` con `motivo: usuario`; no hay borrado duro para que el historial de dosis sobreviva (2.8), y el texto de la UI lo dice). Además, carga y exportación en bloque (abajo). Los eventos salen por `POST /sync/push` con `device_id: "web"`; el teléfono los aplica en su próximo pull (2.9).
 
 #### Formato de carga y exportación
@@ -130,7 +136,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 
 - Importación `.ics`: subconjunto RFC 5545 pensado para que sirva una exportación de Google Calendar; un VEVENT por alarma:
   - `SUMMARY` → `titulo`.
-  - hora local de `DTSTART` → `hora`; la fecha de `DTSTART` se ignora (→ §8).
+  - hora local de `DTSTART` → `hora`, y su fecha local → `fecha` (v3), así una serie importada arranca el día que dice el calendario.
   - `RRULE` → `repeticion`; `UNTIL` en UTC se convierte a fecha local con la zona de la sesión web (la misma que viaja como `params.tz`). `FREQ=MONTHLY;BYMONTHDAY=n` → `bymonthday n`; `FREQ=MONTHLY;BYDAY=1MO` → `byday ["1MO"]`. La forma equivalente que escriben Apple Calendar y Outlook, `FREQ=MONTHLY;BYDAY=MO;BYSETPOS=1` (un solo día sin ordinal, un solo `BYSETPOS` en `1..5` o `-1`), se traduce a `byday ["1MO"]`. Una regla fuera del subconjunto (`YEARLY`, `BYHOUR`, `EXDATE`, varios días o varios `BYMONTHDAY` en `MONTHLY`, cualquier otro uso de `BYSETPOS`, `COUNT` junto con `UNTIL`, …) se rechaza con un error por evento, sin frenar el resto del archivo.
   - `CATEGORIES` → `tipo` (`remedio` | `reunion` | `otro`; si falta, `otro`).
   - `X-CAUCE-DESTINATARIO` y `X-CAUCE-REMEDIO` → `destinatario` y `remedio`.
@@ -144,6 +150,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 
 ## 6. Dependencias y efectos sobre otros features
 
+- `alarmas` consume los tres eventos de `calendario_google` (§3); un cambio en ellos lanza las dos specs juntas.
 - `agenda` (futuro) probablemente consuma `alarma_creada` para mostrar reuniones en el día. Mientras no exista, nada.
 
 ## 7. Fixtures (tests de conformidad)
@@ -160,6 +167,8 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 | P1 | `caso_08_mensual_dia_del_mes` | con `now` en noviembre: `bymonthday 15` da 15-11; `bymonthday 31` salta a 31-12 (noviembre no tiene 31); `bymonthday -1` da el último día del mes (30-11); orden por `proximo_disparo` |
 | P1 | `caso_09_mensual_dia_ordinal` | `byday ["1MO"]` da el primer lunes del mes siguiente; `byday ["-1FR"]` con `interval 2` salta un mes entero; una con `count 3` agotada no aparece |
 | P1 | `caso_10_mensual_count_restantes` | mensual con `count 5`: dos disparos ya pasaron, `proximo_disparo` es el tercero y `restantes = 3` |
+| P1 | `caso_12_fecha_puntual_y_serie` | `alarma_creada.v3` con `fecha`: una puntual dentro de 12 días aparece con `proximo_disparo` ese día; una puntual con `fecha` ya pasada no aparece; una `WEEKLY byday` con `fecha` futura ancla ahí (no en la creación); un v2 sin `fecha` sigue igual |
+| P1 | `caso_11_reunion_google` | una reunión de Google con recordatorio aparece como `gcal:<reunion_id>`, tipo `reunion`, `repeticion: null`, `proximo_disparo = aviso_en`, intercalada por `proximo_disparo` con una alarma propia; una rechazada, una con aviso `apagado` y una cuyo aviso ya pasó no aparecen (2.10) |
 | P2 | `caso_01_tratamiento_completo` | `count 15` → 15 esperadas, 15 dadas |
 | P2 | `caso_02_con_ignoradas` | 15 esperadas, 13 dadas, 2 ignoradas |
 | P2 | `caso_03_dosis_duplicada_por_sync` | dos `dosis_dada` con mismo `programada_para` cuentan 1 |
@@ -179,7 +188,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) v1 de `alarma_creada`/`alarma_modificada` nunca se produjo (no hubo implementación); las proyecciones leen solo v2.
 - `MONTHLY` (spec v3) se agregó editando `alarma_creada.v2` y `alarma_modificada.v2` en el lugar, no como v3: decisión del dueño, porque v2 tampoco llegó a implementarse y no existe ningún evento producido que pueda romperse. Es la única excepción a "nunca editar un schema publicado"; a partir de la primera implementación la regla vuelve a aplicar.
 - (agente) `WEEKLY` sin `byday` repite el mismo día de la semana del primer disparo (el comportamiento por defecto de RFC 5545 cuando no hay `BYDAY`); con `interval` el ciclo ancla en la semana — del calendario ISO, que empieza el lunes (`WKST=MO`) — que contiene ese primer disparo (§4).
-- (agente) Al importar `.ics`, la fecha de `DTSTART` se ignora: solo su hora local define `hora`. El calendario de cauce ancla en "primera ocurrencia de `hora` posterior a la creación", no en la fecha original del evento.
+- `fecha` llegó como `alarma_creada.v3` / `alarma_modificada.v3`, no como campo aditivo de v2: cambia el significado del primer disparo, y un lector que lo ignorara sonaría en el día equivocado. Las proyecciones leen v2 y v3; la app y la web producen v3. Antes de v3, la fecha de `DTSTART` se ignoraba al importar `.ics`.
 - (agente) No hay borrado duro en la web: **Eliminar** emite `alarma_desactivada` con `motivo: usuario` para que el historial de dosis sobreviva (2.8); la UI lo explica.
 - (agente) El parseo de carga/exportación vive en la web, antes del push; no es una proyección ni tiene fixtures.
 - (agente) La web pide P2 con `tz` = zona IANA del navegador y **sin** `now`: el endpoint `GET /api/projections/...` usa el reloj del servidor cuando falta `now`. Así la clave de caché no cambia en cada render y la proyección sigue siendo pura (el `now` lo inyecta el servidor, no la función).
@@ -191,6 +200,8 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) Consola web de P1: pide solo `tz` (el endpoint inyecta `now`, igual que P2). El editor rellena destinatario y remedio desde P2, porque P1 no los trae. El `.ics` usa la fecha local de `proximo_disparo` como DTSTART (ocurrencia válida; P1 no trae el ts de creación). HOURLY cuyo COUNT no es divisible entre los VEVENTs reparte el resto en los primeros; sin count ni until, y si 24 no es divisible por interval, exporta 30 días desde ese ancla. `WKST` en un RRULE importado se ignora (Google lo emite; cauce usa WKST=MO).
 - (agente) Formulario web de alarma: al elegir tipo `remedio` sin repetición se propone `HOURLY` cada 8 h (editable). `HOURLY` ofrece cada 4/6/8/12 h u otro valor, y la duración «por días» es solo de UI: se guarda como `count = ⌈días × 24 / interval⌉` (cada 8 h por 5 días = 15). Al editar, un `HOURLY` cuyo `count × interval` cubre días enteros se muestra en días.
 - (agente) Una alarma pospuesta sigue sonando aunque ya se haya emitido su `alarma_desactivada(fin_tratamiento)`; solo una desactivación por usuario cancela la posposición.
+- Las reuniones de Google no se convierten en `alarma_creada`: v2 no tiene fecha y ya hay eventos producidos, así que P1 las deriva directamente de los eventos de `calendario_google` (2.10). La regla de `aviso_en` se repite aquí tal cual está en esa spec, porque los features solo se hablan por eventos.
+- Las entradas `gcal:` no emiten `alarma_desactivada` al atenderse (2.6 no aplica): son de un solo disparo y desaparecen solas al pasar su aviso. Posponer funciona igual que en cualquier alarma.
 - (agente) v6, tres decisiones de dispositivo. `setAlarmClock` en vez de `setExactAndAllowWhileIdle` porque ColorOS asigna a este último una ventana de 1 h (la alarma llegaba hasta un minuto tarde), mientras que el reloj del sistema usa `setAlarmClock` con `window=0`. Servicio en primer plano en vez de sonido del canal de notificación porque ese sonido es de notificación y ColorOS lo calla en modo silencio; el servicio lo reproduce por `USAGE_ALARM`. Se quita `requestDismissKeyguard` porque con PIN o huella pedía desbloquear en vez de mostrar la alarma encima del bloqueo. La duración de 2 min no cambia (decisión pendiente del dueño). El `showIntent` de la alarma abre la app (cuya pantalla de inicio es la lista de alarmas).
 
 ## 9. Changelog
@@ -199,4 +210,5 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - `v2` — 2026-10-22 — la web administra alarmas: alta, edición, baja y carga/exportación en bloque, con eventos por `POST /sync/push` (`device_id: "web"`) que el teléfono aplica al recibir el pull (2.7, 2.9). `repeticion` pasa a subconjunto de RRULE RFC 5545 (`null` = una vez; `count`/`until` excluyentes; `until` inclusive) y se elimina el campo `fin`; schemas nuevos `alarma_creada.v2` y `alarma_modificada.v2`. Fixtures reescritos a v2 y tres casos nuevos: modificación desde web, `until` inclusive y semanal `byday`. Aclaraciones (sin cambios de versión, v2 aún sin implementar): regla `WEEKLY` precisa y alineada con RFC 5545 (interval cuenta semanas ISO, anclada en la semana del primer disparo); reglas de interoperabilidad de exportación `.ics` (HOURLY desdoblado en VEVENTs DAILY, DTSTART de WEEKLY en el primer disparo, VALARM/X- opcionales en el receptor, import acepta HOURLY).
 - `v3` — 2026-10-23 — repetición mensual: `freq: MONTHLY` con `bymonthday` (`1..31` o `-1` = último día) o `byday` con un ordinal (`1MO`..`5SU`, `-1MO`..`-1SU`), excluyentes; un mes sin ese día se salta y no consume `count`. Editor con modo "Mensual" en app y web. Importación `.ics` acepta `MONTHLY` y traduce la forma Apple/Outlook `BYDAY=MO;BYSETPOS=1`; exportación emite `MONTHLY` tal cual. Schemas `alarma_creada.v2` y `alarma_modificada.v2` editados en el lugar (sin eventos producidos, decisión del dueño, §8). Tres fixtures nuevos (P1 ×2, P2 ×1). `YEARLY` fuera de alcance.
 - `v4` — 2026-10-24 — P1 agrega el campo opcional `restantes`: cantidad de disparos del calendario desde `proximo_disparo`, inclusive. Se incluye solo si la repetición tiene `count` y se omite en los demás casos. La exportación `.ics` usa `COUNT=restantes` para no repetir disparos ya consumidos. Fixture P1 nuevo: mensual con `count 5` y dos disparos pasados.
+- `v5` — 2026-10-28 — las reuniones de Google (`calendario_google`) suenan como alarmas de tipo `reunion` de un solo disparo: P1 consume `reunion_sincronizada`, `reunion_eliminada_en_origen` y `aviso_reunion_editado`, agrega entradas `gcal:<reunion_id>` con `proximo_disparo = aviso_en` y reprograma tras un pull que traiga cualquiera de los tres (2.7, 2.10). Entradas de solo lectura en app y web. Fixture P1 nuevo `caso_11_reunion_google`. Además, `fecha` opcional en `alarma_creada.v3` / `alarma_modificada.v3` para compromisos puntuales y series con fecha de inicio; la importación `.ics` conserva la fecha de `DTSTART`; fixture `caso_12_fecha_puntual_y_serie`. Lanzamiento conjunto con `calendario_google` v1.
 - `v6` — 2026-10-29 — la alarma suena como la del reloj del sistema: `setAlarmClock` (hora exacta), servicio en primer plano que reproduce el tono y la vibración por `USAGE_ALARM` (suena en silencio), pantalla de alarma sobre el bloqueo sin pedir desbloquear; permisos `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` y `WAKE_LOCK`, y requisitos de ColorOS. Sin cambios de eventos, proyecciones ni fixtures.

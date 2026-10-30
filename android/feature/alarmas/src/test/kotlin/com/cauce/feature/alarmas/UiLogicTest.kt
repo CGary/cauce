@@ -12,6 +12,13 @@ class UiLogicTest {
     private val utc = ZoneId.of("UTC")
 
     @Test
+    fun `countNoun usa singular solo para uno`() {
+        assertEquals("1 tratamiento", countNoun(1, "tratamiento", "tratamientos"))
+        assertEquals("2 tratamientos", countNoun(2, "tratamiento", "tratamientos"))
+        assertEquals("0 tratamientos", countNoun(0, "tratamiento", "tratamientos"))
+    }
+
+    @Test
     fun `relativeAgo cubre nunca minutos horas y dias`() {
         assertEquals("nunca", relativeAgo(now, null))
         assertEquals("hace un momento", relativeAgo(now, now.minusSeconds(20)))

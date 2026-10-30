@@ -21,7 +21,6 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberTimePickerState
 import com.cauce.core.ui.CauceSpacing
-import com.cauce.core.ui.ConfirmSheet
 import com.cauce.feature.alarmas.alarmaDesactivada
 import com.cauce.feature.alarmas.formatFechaEs
 import com.cauce.feature.alarmas.formatHora
@@ -259,24 +258,27 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
         }
     }
 
-    ConfirmSheet(
-        visible = confirmDeactivate,
-        title = "Desactivar alarma",
-        message = "«${titulo.trim()}» deja de sonar. No se borra: su historial de dosis sigue visible.",
-        confirmLabel = "Desactivar",
-        onConfirm = {
-            confirmDeactivate = false
-            val id = alarmaId ?: return@ConfirmSheet
-            scope.launch {
-                services.eventStore.append(
-                    listOf(alarmaDesactivada(AlarmasRuntime.deviceId(), Instant.now(), id, "usuario")),
-                )
-                AlarmasRuntime.rescheduleAsync(context)
-                onDone()
-            }
-        },
-        onDismiss = { confirmDeactivate = false },
-    )
+    if (confirmDeactivate) {
+        AlertDialog(
+            onDismissRequest = { confirmDeactivate = false },
+            title = { Text("Desactivar alarma") },
+            text = { Text("«${titulo.trim()}» deja de sonar. No se borra: su historial de dosis sigue visible.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeactivate = false
+                    val id = alarmaId ?: return@TextButton
+                    scope.launch {
+                        services.eventStore.append(
+                            listOf(alarmaDesactivada(AlarmasRuntime.deviceId(), Instant.now(), id, "usuario")),
+                        )
+                        AlarmasRuntime.rescheduleAsync(context)
+                        onDone()
+                    }
+                }) { Text("Desactivar", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDeactivate = false }) { Text("Cancelar") } },
+        )
+    }
 }
 
 /** Optional start date (SPEC 2.1): empty means "desde ahora". */

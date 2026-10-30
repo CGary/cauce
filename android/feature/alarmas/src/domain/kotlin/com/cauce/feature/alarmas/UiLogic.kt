@@ -53,6 +53,14 @@ internal fun groupHistorialByDay(
         .toList()
         .sortedByDescending { it.first }
 
+/** "1 tratamiento" / "2 tratamientos": [n] with the singular or plural noun. */
+internal fun countNoun(n: Int, singular: String, plural: String): String =
+    "$n ${if (n == 1) singular else plural}"
+
+/** Distinct recipients for the Historial dropdown, sorted. */
+internal fun distinctDestinatarios(entries: List<HistorialDosisEntry>): List<String> =
+    entries.map { it.destinatario }.filter { it.isNotBlank() }.distinct().sorted()
+
 /** Percentage of given doses over expected ones; null when nothing was expected yet. */
 internal fun adherenciaPercent(dadas: Int, esperadas: Int): Int? =
     if (esperadas <= 0) null else Math.round(dadas * 100.0 / esperadas).toInt()

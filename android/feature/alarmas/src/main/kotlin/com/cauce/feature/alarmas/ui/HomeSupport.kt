@@ -14,6 +14,7 @@ import com.cauce.feature.alarmas.AdherenciaTratamiento
 import com.cauce.feature.alarmas.AlarmasActivas
 import com.cauce.feature.alarmas.HistorialDosis
 import com.cauce.feature.alarmas.adherenciaPercent
+import com.cauce.feature.alarmas.countNoun
 import com.cauce.feature.alarmas.device.AlarmasRuntime
 import com.cauce.feature.alarmas.newestTs
 import com.cauce.feature.alarmas.nextAlarmLabel
@@ -63,8 +64,8 @@ fun rememberAlarmasHomeSummary(): AlarmasHomeSummary {
                 ?: "Sin dosis registradas",
             adherencia = when {
                 adherencia.isEmpty() -> "Sin tratamientos"
-                pct == null -> "${adherencia.size} tratamientos"
-                else -> "${adherencia.size} tratamientos · $pct% de dosis dadas"
+                pct == null -> countNoun(adherencia.size, "tratamiento", "tratamientos")
+                else -> "${countNoun(adherencia.size, "tratamiento", "tratamientos")} · $pct% de dosis dadas"
             },
         )
     }

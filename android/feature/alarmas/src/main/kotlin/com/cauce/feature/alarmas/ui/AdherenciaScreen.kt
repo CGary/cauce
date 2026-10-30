@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -16,7 +15,6 @@ import com.cauce.core.events.cauceServices
 import com.cauce.core.ui.Card
 import com.cauce.core.ui.CauceSpacing
 import com.cauce.core.ui.EmptyState
-import com.cauce.core.ui.Screen
 import com.cauce.feature.alarmas.AdherenciaTratamiento
 import com.cauce.feature.alarmas.adherenciaPercent
 import com.cauce.feature.alarmas.projectionParams
@@ -44,7 +42,7 @@ fun AdherenciaScreen(onBack: () -> Unit) {
         CauceJson.output.decodeFromJsonElement(AdherenciaTratamiento.serializer, json)
     }
 
-    Screen(title = "Adherencia") {
+    BackScreen(title = "Adherencia", onBack = onBack) {
         if (tratamientos.isEmpty()) {
             EmptyState(title = "Sin tratamientos", message = "Aparecen las alarmas de tipo remedio.")
         }
@@ -73,6 +71,5 @@ fun AdherenciaScreen(onBack: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        TextButton(onClick = onBack) { Text("Volver") }
     }
 }

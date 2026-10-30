@@ -121,7 +121,7 @@ private fun reunionesSubtitle(): String {
             ),
         )
         val n = (svc.projections.compute("calendario_google.reuniones_proximas", events, params) as? JsonArray)?.size ?: 0
-        if (n == 0) "Sin reuniones próximas" else "$n en 14 días"
+        if (n == 0) "Sin reuniones próximas" else (if (n == 1) "1 reunión en 14 días" else "$n reuniones en 14 días")
     }
 }
 

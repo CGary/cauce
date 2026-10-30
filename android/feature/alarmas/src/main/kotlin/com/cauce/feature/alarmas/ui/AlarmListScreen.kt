@@ -130,9 +130,11 @@ fun AlarmListScreen(
                 },
             )
         }
+        val cuentas = google.mapNotNull { metas[it.alarmaId.removePrefix("gcal:")]?.cuenta }.distinct()
+        val cuentaUnica = cuentas.singleOrNull()
         if (google.isNotEmpty()) {
             SectionHeader(
-                title = "Reuniones de Google (${google.size})",
+                title = "Reuniones de Google (${google.size})" + (cuentaUnica?.let { " · $it" } ?: ""),
                 modifier = Modifier.clickable { googleOpen = !googleOpen },
                 trailing = {
                     Icon(
@@ -156,7 +158,11 @@ fun AlarmListScreen(
                     title = alarma.titulo,
                     subtitle = listOf(
                         headline,
-                        "${meta?.cuenta ?: "Google Calendar"} · ${formatInstantForUi(alarma.proximoDisparo)}",
+                        if (cuentaUnica != null) {
+                            formatInstantForUi(alarma.proximoDisparo)
+                        } else {
+                            "${meta?.cuenta ?: "Google Calendar"} · ${formatInstantForUi(alarma.proximoDisparo)}"
+                        },
                     ).joinToString("\n"),
                     onClick = meta?.let { m -> { onGoogleAviso(m.serieId) } },
                     trailing = {
@@ -281,21 +287,28 @@ private fun ColorOsReminderCard() {
     var hiddenNow by remember { mutableStateOf(false) }
     val show = !hiddenNow && (!dismissed || !canUseFullScreenIntent(context))
     if (!show) return
+    val dismiss = {
+        hiddenNow = true
+        dismissed = true
+        prefs.edit().putBoolean("coloros_reminder_dismissed", true).apply()
+    }
     Card {
         Text("Requisitos del teléfono (ColorOS)", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = "Para que las alarmas suenen siempre, en Ajustes > Apps > Cauce activa: " +
-                "inicio automático, ventanas emergentes, mostrar en pantalla de bloqueo y " +
-                "pantalla completa (Notificaciones > Alarmas); batería «Sin restricciones».",
+            text = "Activa inicio automático, ventanas emergentes, pantalla de bloqueo y " +
+                "batería sin restricciones.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = CauceSpacing.xs),
         )
-        TextButton(onClick = {
-            hiddenNow = true
-            dismissed = true
-            prefs.edit().putBoolean("coloros_reminder_dismissed", true).apply()
-        }) { Text("Entendido") }
+        Row {
+            TextButton(onClick = dismiss) { Text("Entendido") }
+            TextButton(onClick = {
+                openSettings(
+                    context,
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri(context)),
+                )
+            }) { Text("Abrir ajustes") }
+        }
     }
 }
 

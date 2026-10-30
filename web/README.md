@@ -53,12 +53,13 @@ La salida queda en `dist/`. MSW y su service worker no entran al build.
 - **Build command:** `npm run build`
 - **Build output directory:** `dist`
 - **Root directory:** `web`
-- **Variable de entorno:** `VITE_API_BASE=https://api.<tu-dominio>`. Se lee en tiempo de build, así que cambiarla exige redeploy.
+- **`VITE_API_BASE`:** debe estar **vacía** en el build de Pages (así las peticiones son relativas, `/api/...` y `/sync/push`, al mismo origen).
+- **`API_ORIGIN`:** variable de entorno del proyecto de Pages (runtime, nunca en el repo) con el origen real de la API, p. ej. `https://api.example.com` (sin barra final). La Pages Function `functions/api/[[path]].ts` (y `functions/sync/[[path]].ts`, que la reutiliza) reenvía GET/POST/OPTIONS de `/api/*` y `/sync/*` a ese origen, copiando método, cabeceras (sin las hop-by-hop), cuerpo y estado, y devolviendo la respuesta en streaming. Así el navegador nunca llama al host de la API: no hay CORS ni bloqueo de «acceso a red local» para quien resuelva ese host a una dirección privada (p. ej. con una VPN activa). Cambiar `API_ORIGIN` no exige rebuild, pero sí un nuevo deploy.
 - **Rutas:** sin `404.html`, Pages sirve `index.html` en cualquier ruta, que es lo que necesita React Router.
-- **CLI:** también se puede desplegar a mano con `VITE_API_BASE=<origen de la API> npm run build` (sin barra final) y, desde la raíz del repo, `wrangler pages deploy web/dist --project-name <proyecto>`.
+- **CLI:** también se puede desplegar a mano con `npm run build` (con `VITE_API_BASE` vacía) y, desde la raíz del repo, `wrangler pages deploy web/dist --project-name <proyecto>`.
 - **`_redirects`:** `public/_redirects` (`/*    /index.html   200`) es el fallback de SPA; Vite lo copia a `dist/`.
-- **CORS:** si la web vive en otro origen que la API, el servidor debe permitirlo con `CAUCE_CORS_ORIGIN` (ver `server/.env.example`), con el origen de la web.
-- **Acceso:** Cloudflare Access (login con Google) delante del sitio y de la API. Las peticiones salen con `credentials: 'include'` para que la cookie de Access viaje aunque la API esté en otro origen.
+- **CORS:** con el proxy de mismo origen no hace falta. Solo si alguien llama a la API desde otro origen, el servidor debe permitirlo con `CAUCE_CORS_ORIGIN` (ver `server/.env.example`), con el origen de la web.
+- **Acceso:** Cloudflare Access (login con Google) delante del sitio y de la API. Las peticiones salen con `credentials: 'include'`; con el proxy de mismo origen la cookie de Access del sitio viaja con ellas.
 
 ## Agregar un feature
 

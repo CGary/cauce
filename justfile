@@ -29,7 +29,17 @@ test: lint test-server test-android test-web
 
 # Compila el APK debug y muestra su ruta
 apk:
-    cd android && ./gradlew :app:assembleDebug && find . -name '*.apk' -path '*debug*'
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -n "${CAUCE_SYNC_BASE_URL:-}" ]; then
+        extra="-PcauceSyncBaseUrl=$CAUCE_SYNC_BASE_URL"
+    elif grep -q '^cauceSyncBaseUrl=' ~/.gradle/gradle.properties 2>/dev/null; then
+        extra=""
+    else
+        echo "Falta cauceSyncBaseUrl: defínela en ~/.gradle/gradle.properties o exporta CAUCE_SYNC_BASE_URL (ver android/README.md)." >&2
+        exit 1
+    fi
+    cd android && ./gradlew :app:assembleDebug $extra && find . -name '*.apk' -path '*debug*'
 
 # Corre el servidor con go run, sin Docker (lee server/.env)
 server-run:

@@ -57,3 +57,51 @@ Trade-offs: la web ahora puede escribir datos del negocio, así que deja de ser 
 El servidor corre en Docker Compose para poder moverlo entre máquinas Linux con un `git clone` y un comando de arranque. Docker es empaquetado, no infraestructura nueva: el estado sigue estando únicamente en SQLite y `server/.env`. Esto reemplaza el enfoque anterior de binario + systemd en el PC viejo y supersede el deploy por `scp` del binario descrito en D2: ahora se mueve un tarball con la base y el entorno, no el ejecutable. El túnel ya corre en Compose (perfil `tunnel`); Litestream se moverá más adelante.
 
 Trade-offs: Docker agrega una dependencia de empaquetado (imagen, Compose y permisos de UID/GID) a cambio de un arranque reproducible en cualquier Linux con `git clone` y `just up`. La imagen no guarda estado: la base vive en `deploy/data/` y la configuración en `server/.env`, así que el backup sigue siendo un tarball de esos dos. Compose fuerza `CAUCE_ADDR` y `CAUCE_DB_PATH` para que un `.env` de desarrollo no rompa el contenedor. El túnel ya corre en Compose; Litestream todavía no.
+
+## D14 — La web llama a la API por mismo origen, con una Pages Function — 2026-10-30
+
+Contexto: los navegadores de quien tiene activo el cliente VPN del dueño resuelven el host de la API a una dirección privada y bloquean la llamada directa como acceso a red local; además, la llamada entre orígenes dependía de CORS.
+
+Decisión: la web pide `/api/*` y `/sync/*` a su propio origen. Una Cloudflare Pages Function (`web/functions/api/[[path]].ts`, reutilizada por `web/functions/sync/[[path]].ts`) reenvía la petición al origen que indica la variable de entorno `API_ORIGIN` del proyecto de Pages. El build de producción usa `VITE_API_BASE` vacío. El CORS del servidor Go (`CAUCE_CORS_ORIGIN`) queda solo como respaldo para acceso directo.
+
+Consecuencias: el navegador nunca llama al host de la API, así que desaparecen el bloqueo de red local y la dependencia de CORS. Paso operativo: `API_ORIGIN` se define en el proyecto de Pages (`wrangler pages secret put API_ORIGIN --project-name <proyecto>` o el panel), nunca en el repo; cambiarlo exige un nuevo deploy, no un rebuild. Detalle en `web/README.md`.
+
+## D15 — El APK debug exige `cauceSyncBaseUrl`; `just apk` falla si falta — 2026-10-30
+
+Contexto: `android/app/build.gradle.kts` lee la propiedad de Gradle `cauceSyncBaseUrl`; sin ella el build cae al host del emulador y el teléfono nunca sincroniza. Pasó el 2026-10-29: 63 eventos quedaron sin sincronizar hasta recompilar.
+
+Decisión: la propiedad vive en `~/.gradle/gradle.properties` del desarrollador, fuera del repo, porque su valor es el hostname privado del servidor. La receta `apk` del `justfile` falla de inmediato si no encuentra la propiedad (ni en ese archivo ni en la variable `CAUCE_SYNC_BASE_URL`, que se pasa como `-PcauceSyncBaseUrl`). Se documenta en `android/README.md`.
+
+Consecuencias: un APK sin destino de sync ya no se puede producir por `just apk` por descuido. Compilar con `./gradlew` directo no tiene la guarda.
+
+## D16 — Los umbrales de adherencia son presentación web, no contrato — 2026-10-30
+
+Contexto: la proyección de adherencia entrega solo conteos (`dadas` / `esperadas`); el SPEC de `alarmas` no define etiquetas ni umbrales.
+
+Decisión: los umbrales (Al día ≥ 90 %, Revisar 70–89 %, Baja < 70 %) son una decisión de presentación de la web. El servidor no expone ninguno y Android muestra solo los números crudos con una leyenda de las definiciones.
+
+Consecuencias: cambiarlos es un cambio solo de web. Volverlos parte del contrato exigiría un cambio de SPEC (P2) más fixtures en ambos lados.
+
+## D17 — Navegación Android: Home es el hub; Nueva alarma en la barra superior — 2026-10-30
+
+Contexto: `core` define `Screen` sin ranura para FAB y los features no tocan `core`; los features no pueden depender entre sí en Gradle.
+
+Decisión: Home sigue siendo el hub (tarjetas con icono y subtítulo), sin barra de navegación inferior. «Nueva alarma» es una acción de la barra superior. Las filas de reuniones de Google son de solo lectura en la lista de alarmas, se muestran plegadas bajo «Reuniones de Google», y tocarlas abre el editor de aviso mediante una lambda inyectada desde `:app`.
+
+Consecuencias: ningún cambio en `core` ni dependencia entre módulos de feature. Si se quiere un FAB o navegación inferior habrá que cambiar `core` en una tarea propia.
+
+## D18 — Retroalimentación de sync: «Último evento» en Android, «Actualizado» en la web — 2026-10-30
+
+Contexto: `core` no expone la fecha de la última sincronización, solo el cursor `server_seq`.
+
+Decisión: Android muestra «Último evento: hace X» con el `ts` del evento local más reciente. La web muestra «Actualizado hace X» a partir de `dataUpdatedAt` de TanStack Query, y tras un push avisa que el teléfono lo aplica en su próximo pull.
+
+Consecuencias: limitación conocida: ninguno de los dos es la hora real de la última sincronización. Agregarla es un cambio de `core` para una tarea futura.
+
+## D19 — Política de reintentos de consultas en la web — 2026-10-30
+
+Contexto: reintentar sin criterio oculta errores reales (4xx) o retrasa el aviso de una caída.
+
+Decisión: las consultas reintentan como máximo 2 veces con backoff exponencial; no reintentan ante 4xx; ante errores de red hacen un solo reintento. El panel de error muestra una causa breve y deja el detalle técnico plegado.
+
+Consecuencias: un 4xx se muestra de inmediato; una caída del servidor aparece en pocos segundos con su causa.

@@ -26,6 +26,14 @@ feature/alarmas/  FeatureModule vacío; proyecciones futuras en src/domain/kotli
 ./gradlew :app:assembleDebug         # APK de debug
 ```
 
+APK de debug y sincronización: el build lee la propiedad de Gradle `cauceSyncBaseUrl`
+(`android/app/build.gradle.kts`). Sin ella el APK apunta al host del emulador y el teléfono
+nunca sincroniza. Defínela una vez en `~/.gradle/gradle.properties` (fuera del repo, porque es el
+hostname privado del servidor): `cauceSyncBaseUrl=https://<tu-servidor>`. `just apk` falla si no
+está definida; también acepta la variable de entorno `CAUCE_SYNC_BASE_URL`. Ver D15 en
+`docs/DECISIONS.md`.
+
+
 ## Reglas de build
 
 - `android/build.gradle.kts` falla la configuración si un `:feature:*` depende de otro feature o de

@@ -280,6 +280,7 @@
 
   .compact-cards .stack-table td:nth-child(3) {
     grid-area: hora;
+    white-space: nowrap;
     text-align: right;
     font-weight: 600;
     font-variant-numeric: tabular-nums;

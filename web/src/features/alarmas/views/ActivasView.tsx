@@ -118,6 +118,7 @@ export default function ActivasView() {
   const [importErrors, setImportErrors] = useState<string[]>([])
   const [tipoFiltro, setTipoFiltro] = useState('')
   const [origenFiltro, setOrigenFiltro] = useState('')
+  const [googleAbierto, setGoogleAbierto] = useState(false)
   const menu = useRef<HTMLDetailsElement>(null)
   useDocumentTitle('Alarmas activas')
 
@@ -222,6 +223,8 @@ export default function ActivasView() {
       (tipoFiltro === '' || row.tipo === tipoFiltro) &&
       (origenFiltro === '' || (origenFiltro === 'google') === isGoogleCalendar(row.alarma_id)),
   )
+  const propias = visibles.filter((row) => !isGoogleCalendar(row.alarma_id))
+  const deGoogle = visibles.filter((row) => isGoogleCalendar(row.alarma_id))
   // Las reuniones de Google no son alarmas de cauce: no se editan ni se exportan.
   const exportables = rowsToBulk(rows, extras, tz)
 
@@ -232,9 +235,17 @@ export default function ActivasView() {
       header: 'Tipo',
       render: (row) => (row.tipo === 'otro' ? null : <TipoChip tipo={row.tipo} />),
     },
-    { header: 'Hora', render: (row) => formatHora(row.hora) },
+    {
+      header: 'Hora',
+      render: (row) => <span className="whitespace-nowrap">{formatHora(row.hora)}</span>,
+    },
     { header: 'Repetición', render: (row) => repeticionResumen(row.repeticion) },
-    { header: 'Próximo disparo', render: (row) => formatFechaHora(row.proximo_disparo) },
+    {
+      header: 'Próximo disparo',
+      render: (row) => (
+        <span className="whitespace-nowrap">{formatFechaHora(row.proximo_disparo)}</span>
+      ),
+    },
     {
       header: 'Acciones',
       render: (row) =>
@@ -415,7 +426,10 @@ export default function ActivasView() {
                 {...c}
                 className={inputClass}
                 value={origenFiltro}
-                onChange={(e) => setOrigenFiltro(e.target.value)}
+                onChange={(e) => {
+                  setOrigenFiltro(e.target.value)
+                  if (e.target.value === 'google') setGoogleAbierto(true)
+                }}
               >
                 <option value="">Todos</option>
                 <option value="cauce">Cauce</option>
@@ -442,15 +456,34 @@ export default function ActivasView() {
         {activas.isSuccess && rows.length > 0 && visibles.length === 0 && (
           <p className="text-muted">Ninguna alarma coincide con los filtros.</p>
         )}
-        {activas.isSuccess && visibles.length > 0 && (
+        {activas.isSuccess && propias.length > 0 && (
           <div className="compact-cards">
             <Table
               caption="Alarmas activas"
               columns={columns}
-              rows={visibles}
+              rows={propias}
               rowKey={(row) => row.alarma_id}
             />
           </div>
+        )}
+        {activas.isSuccess && deGoogle.length > 0 && (
+          <details
+            open={googleAbierto}
+            onToggle={(e) => setGoogleAbierto(e.currentTarget.open)}
+            className="rounded-control border border-line"
+          >
+            <summary className="min-h-11 cursor-pointer px-3 py-3 font-semibold">
+              Reuniones de Google ({deGoogle.length})
+            </summary>
+            <div className="compact-cards">
+              <Table
+                caption="Reuniones de Google"
+                columns={columns}
+                rows={deGoogle}
+                rowKey={(row) => row.alarma_id}
+              />
+            </div>
+          </details>
         )}
       </Card>
       {pendingDelete && (

@@ -77,7 +77,7 @@ export default function ReunionesView() {
       )}
       {groups.map((group) => (
         <Card key={group.dia} className="flex flex-col gap-4">
-          <h2 className="text-lg font-semibold capitalize">{formatDia(group.dia)}</h2>
+          <h2 className="text-lg font-semibold first-letter:uppercase">{formatDia(group.dia)}</h2>
           <ul className="flex flex-col divide-y divide-line">
             {group.rows.map((row) => (
               <li key={row.reunion_id} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">

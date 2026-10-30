@@ -115,10 +115,10 @@ export function localDay(iso: string): string {
 
 const dayHeading = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' })
 
-/** «jueves 30 de octubre» a partir de AAAA-MM-DD. */
+/** «Jueves 30 de octubre» (solo la primera letra en mayúscula) a partir de AAAA-MM-DD. */
 export function formatDia(day: string): string {
   const [y, m, d] = day.split('-').map(Number)
-  return dayHeading.format(new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1))
+  return capitalize(dayHeading.format(new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1)))
 }
 
 /** Agrupa filas ya ordenadas (más recientes primero) por día local, conservando el orden. */

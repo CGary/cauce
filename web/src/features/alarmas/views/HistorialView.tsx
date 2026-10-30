@@ -66,7 +66,7 @@ export default function HistorialView() {
               <div className="flex flex-col gap-5">
                 {groupByDay(visibles, (r) => r.ts).map((group) => (
                   <section key={group.dia} aria-label={formatDia(group.dia)}>
-                    <h3 className="pb-1 text-caption font-semibold capitalize text-muted">
+                    <h3 className="pb-1 text-caption font-semibold text-muted">
                       {formatDia(group.dia)}
                     </h3>
                     <ul className="flex flex-col divide-y divide-line border-y border-line">

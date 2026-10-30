@@ -489,7 +489,9 @@ describe('ActivasView (P1)', () => {
   it('las reuniones de Google son de solo lectura: no se editan ni se eliminan', async () => {
     server.use(http.get(URL_P1, () => HttpResponse.json([ALARMA_PROPIA, REUNION_GOOGLE])))
     renderApp('/alarmas/activas')
-    const table = await screen.findByRole('table', { name: 'Alarmas activas' })
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await userEvent.click(screen.getByText('Reuniones de Google (1)'))
+    const table = screen.getByRole('table', { name: 'Reuniones de Google' })
     expect(within(table).getByText('Google Calendar · se edita en Reuniones')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Editar Reunión de equipo' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Eliminar Reunión de equipo' })).toBeNull()
@@ -521,7 +523,7 @@ describe('ActivasView (P1)', () => {
   it('con solo reuniones de Google no hay nada que exportar', async () => {
     server.use(http.get(URL_P1, () => HttpResponse.json([REUNION_GOOGLE])))
     renderApp('/alarmas/activas')
-    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await screen.findByText('Reuniones de Google (1)')
     await waitFor(() => expect(screen.queryByText(/Cargando adherencia/)).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Exportar JSON' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Exportar ICS' })).toBeDisabled()
@@ -578,14 +580,50 @@ describe('ActivasView (P1)', () => {
     )
     renderApp('/alarmas/activas')
     const table = await screen.findByRole('table', { name: 'Alarmas activas' })
-    expect(within(table).getAllByRole('row')).toHaveLength(4)
+    expect(within(table).getAllByRole('row')).toHaveLength(3)
     expect(within(table).getByText('Remedio')).toBeInTheDocument()
     expect(within(table).queryByText('Otro')).toBeNull()
     expect(document.title).toBe('Alarmas activas · Cauce')
+    expect(within(table).queryByText('Reunión de equipo')).toBeNull()
     await userEvent.selectOptions(screen.getByLabelText('Filtrar por origen'), 'google')
-    expect(within(table).getAllByRole('row')).toHaveLength(2)
+    expect(
+      within(screen.getByRole('table', { name: 'Reuniones de Google' })).getAllByRole('row'),
+    ).toHaveLength(2)
     await userEvent.selectOptions(screen.getByLabelText('Filtrar por origen'), '')
     await userEvent.selectOptions(screen.getByLabelText('Filtrar por tipo'), 'remedio')
-    expect(within(table).getAllByRole('row')).toHaveLength(2)
+    expect(
+      within(screen.getByRole('table', { name: 'Alarmas activas' })).getAllByRole('row'),
+    ).toHaveLength(2)
+  })
+
+  it('pliega las reuniones de Google: propias a la vista, sección con cuenta y cerrada', async () => {
+    const gcal = (n: number) => ({
+      ...REUNION_GOOGLE,
+      alarma_id: `gcal:r${n}`,
+      titulo: `Reunión ${n}`,
+    })
+    server.use(
+      http.get(URL_P1, () =>
+        HttpResponse.json([
+          ALARMA_PROPIA,
+          { ...ALARMA_PROPIA, alarma_id: 'a2', titulo: 'Pastilla' },
+          gcal(1),
+          gcal(2),
+          gcal(3),
+        ]),
+      ),
+    )
+    renderApp('/alarmas/activas')
+    const table = await screen.findByRole('table', { name: 'Alarmas activas' })
+    expect(within(table).getByText('Vitaminas')).toBeInTheDocument()
+    expect(within(table).getByText('Pastilla')).toBeInTheDocument()
+    const summary = screen.getByText('Reuniones de Google (3)')
+    const details = summary.closest('details') as HTMLDetailsElement
+    expect(details.open).toBe(false)
+    await userEvent.click(summary)
+    expect(details.open).toBe(true)
+    const gtable = screen.getByRole('table', { name: 'Reuniones de Google' })
+    expect(within(gtable).getByText('Reunión 1')).toBeInTheDocument()
+    expect(within(gtable).getByText('Reunión 3')).toBeInTheDocument()
   })
 })

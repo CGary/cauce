@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatByday, formatHora, groupByDay, localDay } from './format'
+import { formatByday, formatDia, formatHora, groupByDay, localDay } from './format'
 import { repeticionResumen } from './model'
 
 describe('formatByday', () => {
@@ -48,5 +48,11 @@ describe('groupByDay', () => {
     expect(groups.map((g) => g.rows.length)).toEqual([2, 1])
     expect(groups[0]?.dia).toBe(localDay(at(20, 25)))
     expect(groups[0]?.dia).toBe('2026-10-25')
+  })
+})
+
+describe('formatDia', () => {
+  it('solo la primera letra en mayúscula', () => {
+    expect(formatDia('2026-10-29')).toBe('Jueves, 29 de octubre')
   })
 })

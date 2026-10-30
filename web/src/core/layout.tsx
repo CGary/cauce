@@ -62,7 +62,7 @@ export function Layout({ features }: { features: FeatureModule[] }) {
       </a>
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-page flex-col gap-3 px-4 pt-3 sm:px-6 lg:flex-row lg:items-center lg:gap-10 lg:py-3">
-          <div className="flex items-center justify-between gap-3 lg:contents">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 lg:contents">
             <Brand />
             <SyncBadge />
           </div>

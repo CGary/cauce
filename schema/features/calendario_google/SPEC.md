@@ -109,6 +109,7 @@ Convenciones: todo `datetime` es RFC 3339 en UTC (`...Z`). La zona local entra c
 - (agente) `reunion_eliminada_en_origen` solo para ocurrencias previas con `inicio` futuro dentro de los 14 días que ya no están; las que simplemente pasaron al pasado no se eliminan.
 - (agente) La edición del aviso en Android ofrece "minutos antes" para reuniones con hora y "a una hora" para las de todo el día, más "apagado" en ambas.
 - (agente) Mi respuesta se lee de `SELF_ATTENDEE_STATUS` del proveedor (derivada de mi asistente en `Attendees`); `ATTENDEE_RELATIONSHIP` no tiene un valor "yo" en Android.
+- (agente) Consola web: el estado vacío de «Reuniones próximas» muestra la hora de la última lectura de la proyección, para distinguir «sin reuniones» de «datos viejos»; tras guardar un aviso avisa que el teléfono lo aplica en su próximo pull.
 
 ## 9. Changelog
 

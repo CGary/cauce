@@ -29,9 +29,11 @@ export function formatDia(day: string): string {
 }
 
 export function formatHora(iso: string): string {
-  return new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', hour12: false }).format(
-    new Date(iso),
-  )
+  return new Intl.DateTimeFormat('es', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso))
 }
 
 export function agruparPorDia(rows: Reunion[]): { dia: string; rows: Reunion[] }[] {
@@ -76,4 +78,17 @@ export function avisoPayload(
     return { ok: false, error: 'Los minutos son un entero de 0 o más' }
   }
   return { ok: true, payload: { serie_id: serieId, minutos_antes: Number(form.minutos.trim()) } }
+}
+
+const fechaHora = new Intl.DateTimeFormat('es', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
+/** RFC 3339 → «30 oct, 08:15»: 24 h de dos dígitos, igual que en Activas. */
+export function formatFechaHora(iso: string): string {
+  return fechaHora.format(new Date(iso))
 }

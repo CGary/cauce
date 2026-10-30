@@ -37,4 +37,18 @@ describe('Layout y rutas', () => {
     renderApp('/nada', fake)
     expect(await screen.findByText('Esta página no existe')).toBeInTheDocument()
   })
+
+  it('muestra cuándo se actualizó por última vez', async () => {
+    renderApp('/', fake)
+    await screen.findByText('vista uno')
+    expect(screen.getByRole('status')).toHaveTextContent(/Conectando|Actualizado|Sin conexión/)
+  })
+
+  it('la navegación envuelve en filas en pantallas angostas en vez de desbordar', async () => {
+    renderApp('/', fake)
+    await screen.findByText('vista uno')
+    const nav = screen.getByRole('navigation', { name: 'Principal' })
+    expect(nav).toHaveClass('flex-wrap')
+    expect(nav).not.toHaveClass('overflow-x-auto')
+  })
 })

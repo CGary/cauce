@@ -1,14 +1,25 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { browserTimeZone, formatDateTime } from '../../../core/time'
+import { formatAgo, useNow } from '../../../core/sync'
+import { browserTimeZone } from '../../../core/time'
 import { buildEvent, PushError, usePushEvents } from '../../../core/push'
 import { Button, Card, Chip, EmptyState, ErrorState, Page, Spinner } from '../../../core/ui'
 import { reunionesQuery } from '../api'
-import { agruparPorDia, avisoTexto, formatDia, formatHora, V_AVISO_REUNION_EDITADO } from '../model'
+import {
+  agruparPorDia,
+  avisoTexto,
+  formatDia,
+  formatFechaHora,
+  formatHora,
+  V_AVISO_REUNION_EDITADO,
+} from '../model'
+import { useDocumentTitle } from '../title'
 import { AvisoForm } from './AvisoForm'
 
 export default function ReunionesView() {
+  useDocumentTitle('Reuniones próximas')
   const tz = browserTimeZone()
+  const now = useNow()
   const reuniones = useQuery(reunionesQuery({ tz }))
   const push = usePushEvents()
   const [editing, setEditing] = useState<string | null>(null)
@@ -23,7 +34,9 @@ export default function ReunionesView() {
       await push.mutateAsync([
         buildEvent('aviso_reunion_editado', payload, { v: V_AVISO_REUNION_EDITADO }),
       ])
-      setNotice('Aviso guardado. Vale para toda la serie.')
+      setNotice(
+        'Aviso guardado. Vale para toda la serie. El teléfono lo aplica en su próximo pull.',
+      )
       setEditing(null)
     } catch {
       setNotice(null)
@@ -59,7 +72,7 @@ export default function ReunionesView() {
       {reuniones.isSuccess && groups.length === 0 && (
         <EmptyState
           title="No hay reuniones próximas"
-          description="Las reuniones llegan desde el calendario del teléfono."
+          description={`Las reuniones llegan desde el calendario del teléfono. Última lectura ${reuniones.dataUpdatedAt === 0 ? 'desconocida' : formatAgo(reuniones.dataUpdatedAt, now)}: si el teléfono no sincronizó, la lista puede estar vieja.`}
         />
       )}
       {groups.map((group) => (
@@ -79,7 +92,7 @@ export default function ReunionesView() {
                         {avisoTexto(row.aviso)}
                       </Chip>
                       <span className="text-muted">
-                        {row.aviso_en ? `Suena ${formatDateTime(row.aviso_en)}` : 'No suena'}
+                        {row.aviso_en ? `Suena ${formatFechaHora(row.aviso_en)}` : 'No suena'}
                       </span>
                     </p>
                   </div>

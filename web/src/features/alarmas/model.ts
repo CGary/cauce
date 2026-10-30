@@ -1,4 +1,5 @@
 import { browserTimeZone } from '../../core/time'
+import { formatByday } from './format'
 import type {
   AlarmaActiva,
   AlarmaPayload,
@@ -348,7 +349,7 @@ export function repeticionResumen(rep: AlarmaActiva['repeticion']): string {
   if (rep.interval !== undefined && rep.interval !== 1) bits.push(`cada ${rep.interval}`)
   if (rep.bymonthday === -1) bits.push('último día')
   else if (rep.bymonthday !== undefined) bits.push(`día ${rep.bymonthday}`)
-  if (rep.byday && rep.byday.length > 0) bits.push(rep.byday.join(', '))
+  if (rep.byday && rep.byday.length > 0) bits.push(formatByday(rep.byday))
   if (rep.count !== undefined) bits.push(`${rep.count} veces`)
   if (rep.until) bits.push(`hasta ${rep.until}`)
   return bits.join(' · ')

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router'
-import { browserTimeZone, formatDateTime } from '../../../core/time'
+import { Link, useSearchParams } from 'react-router'
+import { browserTimeZone } from '../../../core/time'
 import {
   Card,
   Chip,
@@ -9,12 +9,13 @@ import {
   Page,
   QueryState,
   SectionHeader,
-  Stat,
   Table,
   inputClass,
   type Column,
 } from '../../../core/ui'
 import { adherenciaQuery } from '../api'
+import { formatFechaHora } from '../format'
+import { useDocumentTitle } from '../title'
 import type { AdherenciaTratamiento } from '../types'
 
 /** Presentación: dadas sobre esperadas, con umbrales solo para elegir el tono de la barra. */
@@ -24,14 +25,32 @@ function Adherencia({ row }: { row: AdherenciaTratamiento }) {
   return (
     <Meter
       value={pct}
-      tone={pct >= 90 ? 'good' : pct >= 70 ? 'warn' : 'bad'}
+      tone={pct >= UMBRAL_AL_DIA ? 'good' : pct >= UMBRAL_REVISAR ? 'warn' : 'bad'}
       label={`Adherencia de ${row.destinatario}, ${row.remedio}`}
     />
   )
 }
 
+/** Umbrales de la barra, solo de presentación: el servidor entrega conteos, no un estado (SPEC §8). */
+const UMBRAL_AL_DIA = 90
+const UMBRAL_REVISAR = 70
+
 const columns: Column<AdherenciaTratamiento>[] = [
-  { header: 'Destinatario', render: (r) => r.destinatario },
+  {
+    header: 'Destinatario',
+    render: (r) => (
+      <Link
+        to={{
+          pathname: '/alarmas/historial',
+          search: `?destinatario=${encodeURIComponent(r.destinatario)}`,
+        }}
+        className="font-medium text-primary-ink underline underline-offset-4"
+        aria-label={`${r.destinatario}: ver historial de dosis`}
+      >
+        {r.destinatario}
+      </Link>
+    ),
+  },
   { header: 'Remedio', render: (r) => r.remedio },
   { header: 'Adherencia', render: (r) => <Adherencia row={r} /> },
   { header: 'Esperadas', align: 'right', render: (r) => r.dosis_esperadas },
@@ -43,7 +62,7 @@ const columns: Column<AdherenciaTratamiento>[] = [
   },
   {
     header: 'Última dosis',
-    render: (r) => (r.ultima_dosis ? formatDateTime(r.ultima_dosis) : '—'),
+    render: (r) => (r.ultima_dosis ? formatFechaHora(r.ultima_dosis) : '—'),
   },
 ]
 
@@ -51,6 +70,7 @@ const columns: Column<AdherenciaTratamiento>[] = [
 export default function AdherenciaView() {
   const [search, setSearch] = useSearchParams()
   const destinatario = search.get('destinatario') ?? ''
+  useDocumentTitle('Adherencia por tratamiento')
   const query = useQuery(adherenciaQuery({ tz: browserTimeZone() }))
 
   return (
@@ -96,7 +116,17 @@ export default function AdherenciaView() {
                   )}
                 </Field>
               </SectionHeader>
-              <Stat label="Tratamientos" value={visibles.length} />
+              <p className="text-body font-medium tabular-nums">
+                {visibles.length} {visibles.length === 1 ? 'tratamiento' : 'tratamientos'} ·{' '}
+                {visibles.reduce((n, r) => n + r.dosis_dadas, 0)} dosis dadas de{' '}
+                {visibles.reduce((n, r) => n + r.dosis_esperadas, 0)} esperadas ·{' '}
+                {visibles.reduce((n, r) => n + r.ignoradas, 0)} ignoradas
+              </p>
+              <p className="text-caption text-muted">
+                Al día: {UMBRAL_AL_DIA} % o más · Revisar: {UMBRAL_REVISAR}–{UMBRAL_AL_DIA - 1} % ·
+                Baja: menos de {UMBRAL_REVISAR} %. El servidor entrega solo los conteos; los
+                umbrales son de esta consola.
+              </p>
               <Table
                 caption="Adherencia por tratamiento"
                 columns={columns}

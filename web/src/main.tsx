@@ -2,14 +2,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router'
-import { shouldRetry } from './core/api'
+import { retryDelay, shouldRetry } from './core/api'
 import { buildRoutes } from './core/routes'
 import { FEATURES } from './features'
 import './index.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 60_000, refetchOnWindowFocus: true, retry: shouldRetry },
+    queries: { staleTime: 60_000, refetchOnWindowFocus: true, retry: shouldRetry, retryDelay },
   },
 })
 

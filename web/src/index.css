@@ -66,13 +66,13 @@
     --success-soft: #11341f;
     --success-ink: #92e5b0;
     --warning: #f0b84a;
-    --warning-soft: #392a08;
+    --warning-soft: #2e2615;
     --warning-ink: #f6d083;
     --danger: #f27b72;
     --danger-hover: #f59a92;
     --on-danger: #2a0907;
-    --danger-soft: #3b1411;
-    --danger-ink: #fbaca5;
+    --danger-soft: #2c1b1a;
+    --danger-ink: #efb9b4;
     --info: #78b6ee;
     --info-soft: #11293f;
     --info-ink: #a8d2f6;
@@ -230,5 +230,81 @@
       font-weight: 500;
       text-align: left;
     }
+  }
+}
+
+/*
+ * Sin capa a propósito: gana sobre `last:border-0` de las filas (tarjetas apiladas conservan su borde)
+ * y da forma compacta a las tarjetas de Activas en pantallas angostas.
+ */
+@media (max-width: 47.99rem) {
+  .stack-table tr:last-child {
+    border: 1px solid var(--line);
+  }
+
+  .stack-table td:empty {
+    display: none;
+  }
+
+  .compact-cards .stack-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'titulo hora'
+      'repeticion proximo'
+      'tipo tipo'
+      'acciones acciones';
+    gap: 0.125rem 0.75rem;
+  }
+
+  .compact-cards .stack-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+
+  .compact-cards .stack-table td::before {
+    display: none;
+  }
+
+  .compact-cards .stack-table td:nth-child(1) {
+    grid-area: titulo;
+    font-weight: 600;
+  }
+
+  .compact-cards .stack-table td:nth-child(2) {
+    grid-area: tipo;
+    padding-top: 0.25rem;
+  }
+
+  .compact-cards .stack-table td:nth-child(3) {
+    grid-area: hora;
+    text-align: right;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .compact-cards .stack-table td:nth-child(4) {
+    grid-area: repeticion;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .compact-cards .stack-table td:nth-child(5) {
+    grid-area: proximo;
+    text-align: right;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .compact-cards .stack-table td:nth-child(5)::before {
+    display: inline;
+    content: 'Próx. ';
+  }
+
+  .compact-cards .stack-table td:nth-child(6) {
+    grid-area: acciones;
+    padding-top: 0.5rem;
   }
 }

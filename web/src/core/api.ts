@@ -49,8 +49,52 @@ export function projectionQuery<T>(feature: string, name: string, params: Projec
   })
 }
 
-/** Reintenta solo errores de red o 5xx; un 4xx no se arregla reintentando. */
+/**
+ * Reintentos de lectura: máximo 2. Un 4xx no se arregla reintentando; un fallo de red o CORS
+ * (status 0, o un TypeError crudo de fetch) se reintenta una sola vez, porque repetirlo no lo arregla.
+ */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
   if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false
+  if (error instanceof TypeError || (error instanceof ApiError && error.status === 0)) {
+    return failureCount < 1
+  }
   return failureCount < 2
+}
+
+/** Espera exponencial entre reintentos: 1 s, 2 s, 4 s… con tope de 8 s. */
+export function retryDelay(attempt: number): number {
+  return Math.min(1000 * 2 ** attempt, 8000)
+}
+
+export interface ErrorCause {
+  /** Causa corta en español llano. */
+  cause: string
+  /** Dato técnico para el panel plegado. */
+  detail: string
+}
+
+/** Traduce el error de una consulta a una causa corta y un detalle técnico. */
+export function describeError(error: unknown, online: boolean = navigator.onLine): ErrorCause {
+  if (error instanceof ApiError) {
+    const { status } = error
+    if (status === 0) {
+      return {
+        cause: online ? 'sin conexión con la API' : 'sin conexión a internet',
+        detail: 'Sin respuesta del servidor (red caída, CORS o sesión de Access bloqueada)',
+      }
+    }
+    const detail = `HTTP ${status}`
+    if (status === 401 || status === 403) {
+      return { cause: `la API rechazó el acceso (${status}); iniciá sesión de nuevo`, detail }
+    }
+    if (status === 404) return { cause: 'la API no encontró esa proyección (404)', detail }
+    return { cause: `la API respondió ${status}`, detail }
+  }
+  if (error instanceof TypeError) {
+    return {
+      cause: online ? 'sin conexión con la API' : 'sin conexión a internet',
+      detail: error.message || 'TypeError',
+    }
+  }
+  return { cause: 'error inesperado', detail: error instanceof Error ? error.message : 'Error' }
 }

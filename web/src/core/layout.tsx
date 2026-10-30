@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import type { FeatureModule } from './feature'
+import { formatAgo, useNow, useSyncStatus } from './sync'
 import { Spinner } from './ui'
 
 function Brand() {
@@ -25,6 +26,30 @@ function Brand() {
   )
 }
 
+/** Insignia de conexión: «Actualizado hace X min» o «Sin conexión». */
+function SyncBadge() {
+  const { lastFetch, offline } = useSyncStatus()
+  const now = useNow()
+  const text = offline
+    ? lastFetch > 0
+      ? `Sin conexión · último dato ${formatAgo(lastFetch, now)}`
+      : 'Sin conexión'
+    : lastFetch > 0
+      ? `Actualizado ${formatAgo(lastFetch, now)}`
+      : 'Conectando…'
+  return (
+    <p
+      role="status"
+      className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-caption font-medium whitespace-nowrap lg:order-last lg:ml-auto ${
+        offline ? 'bg-warning-soft text-warning-ink' : 'bg-surface-2 text-muted'
+      }`}
+    >
+      <span aria-hidden="true">{offline ? '▲' : '●'}</span>
+      {text}
+    </p>
+  )
+}
+
 /** Navegación construida desde el registro; core/ recibe los features, nunca los importa. */
 export function Layout({ features }: { features: FeatureModule[] }) {
   return (
@@ -37,14 +62,14 @@ export function Layout({ features }: { features: FeatureModule[] }) {
       </a>
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-page flex-col gap-3 px-4 pt-3 sm:px-6 lg:flex-row lg:items-center lg:gap-10 lg:py-3">
-          <Brand />
-          <nav
-            aria-label="Principal"
-            className="-mx-4 flex gap-6 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:p-0"
-          >
+          <div className="flex items-center justify-between gap-3 lg:contents">
+            <Brand />
+            <SyncBadge />
+          </div>
+          <nav aria-label="Principal" className="flex flex-wrap gap-x-6 gap-y-1 pb-2 lg:p-0">
             {features.map((feature) => (
-              <div key={feature.id} className="flex flex-none items-center gap-1">
-                <span className="mr-2 text-caption font-semibold uppercase tracking-wide text-muted">
+              <div key={feature.id} className="flex flex-wrap items-center gap-1">
+                <span className="mr-2 text-caption font-semibold uppercase tracking-wide text-ink/80">
                   {feature.title}
                 </span>
                 {feature.routes.map((route) => (

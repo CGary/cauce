@@ -1,31 +1,26 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { formatDateTime } from '../../../core/time'
-import {
-  Button,
-  Card,
-  Field,
-  Page,
-  QueryState,
-  SectionHeader,
-  Table,
-  inputClass,
-  type Column,
-} from '../../../core/ui'
-import { historialQuery } from '../api'
-import type { HistorialDosis } from '../types'
+import { browserTimeZone } from '../../../core/time'
+import { Button, Card, Field, Page, QueryState, SectionHeader, inputClass } from '../../../core/ui'
+import { adherenciaQuery, historialQuery } from '../api'
+import { formatDia, formatHoraLocal, groupByDay } from '../format'
+import { useDocumentTitle } from '../title'
 
-const columns: Column<HistorialDosis>[] = [
-  { header: 'Fecha', render: (r) => formatDateTime(r.ts) },
-  { header: 'Destinatario', render: (r) => r.destinatario },
-  { header: 'Remedio', render: (r) => r.remedio },
-]
+/** Filas visibles de a tandas: el historial crece sin límite. */
+const PAGE_SIZE = 50
 
 /** P3 `historial_dosis`; el destinatario viaja como param de la proyección. */
 export default function HistorialView() {
+  useDocumentTitle('Historial de dosis')
   const [search, setSearch] = useSearchParams()
   const destinatario = search.get('destinatario') ?? ''
   const query = useQuery(historialQuery({ destinatario: destinatario || undefined }))
+  // Mismas opciones que en Adherencia: los destinatarios que conoce la proyección P2.
+  const adherencia = useQuery(adherenciaQuery({ tz: browserTimeZone() }))
+  const options = [...new Set((adherencia.data ?? []).map((r) => r.destinatario))].sort()
+  if (destinatario && !options.includes(destinatario)) options.push(destinatario)
+  const [shown, setShown] = useState(PAGE_SIZE)
 
   return (
     <Page
@@ -34,30 +29,26 @@ export default function HistorialView() {
     >
       <Card className="flex flex-col gap-5">
         <SectionHeader title="Dosis dadas" description="Las más recientes primero.">
-          <form
-            className="flex items-end gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const value = String(new FormData(e.currentTarget).get('destinatario') ?? '').trim()
-              setSearch(value ? { destinatario: value } : {})
-            }}
-          >
-            <Field label="Destinatario" className="w-full sm:w-52">
-              {(c) => (
-                <input
-                  {...c}
-                  name="destinatario"
-                  defaultValue={destinatario}
-                  key={destinatario}
-                  placeholder="Todos"
-                  className={inputClass}
-                />
-              )}
-            </Field>
-            <Button type="submit" variant="primary">
-              Filtrar
-            </Button>
-          </form>
+          <Field label="Destinatario" className="w-full sm:w-56">
+            {(c) => (
+              <select
+                {...c}
+                className={inputClass}
+                value={destinatario}
+                onChange={(e) => {
+                  setShown(PAGE_SIZE)
+                  setSearch(e.target.value ? { destinatario: e.target.value } : {})
+                }}
+              >
+                <option value="">Todos</option>
+                {options.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
         </SectionHeader>
         <QueryState
           query={query}
@@ -69,14 +60,39 @@ export default function HistorialView() {
             description: 'Se registran al tocar «Hecho» en una alarma de tipo remedio.',
           }}
         >
-          {(rows) => (
-            <Table
-              caption="Historial de dosis"
-              columns={columns}
-              rows={rows}
-              rowKey={(r) => `${r.ts}|${r.destinatario}|${r.remedio}`}
-            />
-          )}
+          {(rows) => {
+            const visibles = rows.slice(0, shown)
+            return (
+              <div className="flex flex-col gap-5">
+                {groupByDay(visibles, (r) => r.ts).map((group) => (
+                  <section key={group.dia} aria-label={formatDia(group.dia)}>
+                    <h3 className="pb-1 text-caption font-semibold capitalize text-muted">
+                      {formatDia(group.dia)}
+                    </h3>
+                    <ul className="flex flex-col divide-y divide-line border-y border-line">
+                      {group.rows.map((r) => (
+                        <li
+                          key={`${r.ts}|${r.destinatario}|${r.remedio}`}
+                          className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 px-1 py-3"
+                        >
+                          <span className="font-semibold tabular-nums">
+                            {formatHoraLocal(r.ts)}
+                          </span>
+                          <span>{r.destinatario}</span>
+                          <span className="text-muted">{r.remedio}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+                {rows.length > shown && (
+                  <Button onClick={() => setShown((n) => n + PAGE_SIZE)}>
+                    Cargar más ({rows.length - shown} restantes)
+                  </Button>
+                )}
+              </div>
+            )
+          }}
         </QueryState>
       </Card>
     </Page>

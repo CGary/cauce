@@ -503,9 +503,7 @@ describe('ActivasView (P1)', () => {
     try {
       renderApp('/alarmas/activas')
       await screen.findByRole('table', { name: 'Alarmas activas' })
-      await waitFor(() =>
-        expect(screen.queryByText(/Cargando adherencia/)).not.toBeInTheDocument(),
-      )
+      await waitFor(() => expect(screen.queryByText(/Cargando adherencia/)).not.toBeInTheDocument())
       await userEvent.click(screen.getByRole('button', { name: 'Exportar JSON' }))
       const json = await blobText(download.blobs[0] as Blob)
       expect(json).toContain('Vitaminas')
@@ -527,5 +525,67 @@ describe('ActivasView (P1)', () => {
     await waitFor(() => expect(screen.queryByText(/Cargando adherencia/)).not.toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Exportar JSON' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Exportar ICS' })).toBeDisabled()
+  })
+
+  it('si falla la adherencia, un solo aviso; exportar sigue habilitado y editar no', async () => {
+    server.use(
+      http.get(URL_P1, () => HttpResponse.json([ALARMA_PROPIA])),
+      http.get(URL_P2, () => new HttpResponse(null, { status: 500 })),
+    )
+    renderApp('/alarmas/activas')
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    expect(await screen.findByText(/No se pudo cargar la adherencia/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exportar JSON' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Exportar ICS' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Editar Vitaminas' })).toBeDisabled()
+  })
+
+  it('con la adherencia caída, el .ics conserva COUNT desde restantes de P1', async () => {
+    server.use(
+      http.get(URL_P1, () =>
+        HttpResponse.json([
+          {
+            ...ALARMA_PROPIA,
+            repeticion: { freq: 'DAILY', count: 15 },
+            restantes: 9,
+          },
+        ]),
+      ),
+      http.get(URL_P2, () => new HttpResponse(null, { status: 500 })),
+    )
+    const download = captureDownload()
+    try {
+      renderApp('/alarmas/activas')
+      await screen.findByRole('table', { name: 'Alarmas activas' })
+      expect(await screen.findByText(/No se pudo cargar la adherencia/)).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Exportar ICS' }))
+      const ics = await blobText(download.blobs[0] as Blob)
+      expect(ics).toContain('RRULE:FREQ=DAILY;COUNT=9')
+    } finally {
+      download.restore()
+    }
+  })
+
+  it('«otro» no muestra chip de tipo y los filtros acotan la tabla', async () => {
+    server.use(
+      http.get(URL_P1, () =>
+        HttpResponse.json([
+          ALARMA_PROPIA,
+          { ...ALARMA_PROPIA, alarma_id: 'a2', titulo: 'Pastilla', tipo: 'remedio' },
+          REUNION_GOOGLE,
+        ]),
+      ),
+    )
+    renderApp('/alarmas/activas')
+    const table = await screen.findByRole('table', { name: 'Alarmas activas' })
+    expect(within(table).getAllByRole('row')).toHaveLength(4)
+    expect(within(table).getByText('Remedio')).toBeInTheDocument()
+    expect(within(table).queryByText('Otro')).toBeNull()
+    expect(document.title).toBe('Alarmas activas · Cauce')
+    await userEvent.selectOptions(screen.getByLabelText('Filtrar por origen'), 'google')
+    expect(within(table).getAllByRole('row')).toHaveLength(2)
+    await userEvent.selectOptions(screen.getByLabelText('Filtrar por origen'), '')
+    await userEvent.selectOptions(screen.getByLabelText('Filtrar por tipo'), 'remedio')
+    expect(within(table).getAllByRole('row')).toHaveLength(2)
   })
 })

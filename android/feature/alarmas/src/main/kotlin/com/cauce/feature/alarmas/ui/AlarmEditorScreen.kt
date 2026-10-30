@@ -2,7 +2,30 @@ package com.cauce.feature.alarmas.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTimePickerState
+import com.cauce.core.ui.CauceSpacing
+import com.cauce.core.ui.ConfirmSheet
+import com.cauce.feature.alarmas.alarmaDesactivada
+import com.cauce.feature.alarmas.formatFechaEs
+import com.cauce.feature.alarmas.formatHora
+import com.cauce.feature.alarmas.parseHora
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -30,7 +53,6 @@ import com.cauce.core.events.cauceServices
 import com.cauce.core.ui.BigButton
 import com.cauce.core.ui.Chip
 import com.cauce.core.ui.NumberInput
-import com.cauce.core.ui.Screen
 import com.cauce.core.ui.SectionHeader
 import com.cauce.feature.alarmas.Alarm
 import com.cauce.feature.alarmas.AlarmasActivas
@@ -60,6 +82,7 @@ import java.time.ZoneOffset
  * The "Mensual" frequency offers the two modes of SPEC 2.1: día del mes (with "último día") and
  * n-ésimo día de la semana (with "último").
  */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
     val context = LocalContext.current
@@ -97,6 +120,7 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
     var form by remember { mutableStateOf(RepeticionForm()) }
     var limite by remember { mutableStateOf(Limite.NINGUNO) }
     var error by remember { mutableStateOf<String?>(null) }
+    var confirmDeactivate by remember { mutableStateOf(false) }
 
     LaunchedEffect(existing) {
         val prefill = existing ?: return@LaunchedEffect
@@ -116,97 +140,143 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
         }
     }
 
-    Screen(title = if (alarmaId == null) "Nueva alarma" else "Editar alarma") {
-        OutlinedTextField(
-            value = titulo,
-            onValueChange = { titulo = it },
-            label = { Text("Título") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
+    val save: () -> Unit = {
+            val finalForm = when (limite) {
+                Limite.NINGUNO -> form.copy(count = null, until = null)
+                Limite.COUNT -> form.copy(until = null)
+                Limite.UNTIL -> form.copy(count = null)
+            }
+            val result = runCatching {
+                val repeticion = finalForm.toJson()
+                val device = AlarmasRuntime.deviceId()
+                val now = Instant.now()
+                if (alarmaId == null) {
+                    alarmaCreada(
+                        device, now, UuidV7.newId(), titulo.trim(), tipo, hora.trim(),
+                        repeticion, destinatario.trim().ifBlank { null },
+                        remedio.trim().ifBlank { null },
+                        fecha = fecha.ifBlank { null },
+                    )
+                } else {
+                    alarmaModificada(
+                        device, now, alarmaId, titulo.trim(), tipo, hora.trim(),
+                        repeticion, destinatario.trim().ifBlank { null },
+                        remedio.trim().ifBlank { null },
+                        fecha = fecha.ifBlank { null },
+                    )
+                }
+            }
+            result.fold(
+                onSuccess = { event ->
+                    error = null
+                    scope.launch {
+                        services.eventStore.append(listOf(event))
+                        AlarmasRuntime.rescheduleAsync(context)
+                        onDone()
+                    }
+                },
+                onFailure = { error = it.message ?: "Datos inválidos" },
+            )
+}
 
-        SectionHeader(title = "Tipo")
-        Row(horizontalArrangement = Arrangement.spacedBy(com.cauce.core.ui.CauceSpacing.sm)) {
-            listOf("remedio" to "Remedio", "reunion" to "Reunión", "otro" to "Otro").forEach { (value, label) ->
-                Chip(label = label, selected = tipo == value, onClick = { tipo = value })
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (alarmaId == null) "Nueva alarma" else "Editar alarma") },
+                navigationIcon = {
+                    IconButton(onClick = onDone) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    }
+                },
+            )
+        },
+        bottomBar = {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = CauceSpacing.md, vertical = CauceSpacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(CauceSpacing.sm),
+            ) {
+                OutlinedButton(onClick = onDone, modifier = Modifier.weight(1f)) { Text("Cancelar") }
+                Button(onClick = save, modifier = Modifier.weight(1f)) { Text("Guardar") }
+            }
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = CauceSpacing.md, vertical = CauceSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(CauceSpacing.sm),
+        ) {
+            OutlinedTextField(
+                value = titulo,
+                onValueChange = { titulo = it },
+                label = { Text("Título") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            SectionHeader(title = "Tipo")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(CauceSpacing.sm)) {
+                listOf("remedio" to "Remedio", "reunion" to "Reunión", "otro" to "Otro").forEach { (value, label) ->
+                    Chip(label = label, selected = tipo == value, onClick = { tipo = value })
+                }
+            }
+
+            if (tipo == "remedio") {
+                OutlinedTextField(
+                    value = destinatario,
+                    onValueChange = { destinatario = it },
+                    label = { Text("Destinatario") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = remedio,
+                    onValueChange = { remedio = it },
+                    label = { Text("Remedio") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            HoraInicio(hora = hora, onChange = { hora = it })
+
+            FechaInicio(fecha = fecha, onChange = { fecha = it })
+
+            RepeticionSection(form = form, limite = limite, onLimite = { limite = it }, onChange = { form = it })
+
+            error?.let {
+                Text(text = it, color = MaterialTheme.colorScheme.error)
+            }
+
+
+            if (existing != null && alarmaId != null) {
+                TextButton(onClick = { confirmDeactivate = true }) {
+                    Text("Desactivar", color = MaterialTheme.colorScheme.error)
+                }
             }
         }
-
-        if (tipo == "remedio") {
-            OutlinedTextField(
-                value = destinatario,
-                onValueChange = { destinatario = it },
-                label = { Text("Destinatario") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = remedio,
-                onValueChange = { remedio = it },
-                label = { Text("Remedio") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        OutlinedTextField(
-            value = hora,
-            onValueChange = { hora = it },
-            label = { Text("Hora (HH:MM)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        FechaInicio(fecha = fecha, onChange = { fecha = it })
-
-        RepeticionSection(form = form, limite = limite, onLimite = { limite = it }, onChange = { form = it })
-
-        error?.let {
-            Text(text = it, color = MaterialTheme.colorScheme.error)
-        }
-
-        BigButton(
-            text = "Guardar",
-            onClick = {
-                val finalForm = when (limite) {
-                    Limite.NINGUNO -> form.copy(count = null, until = null)
-                    Limite.COUNT -> form.copy(until = null)
-                    Limite.UNTIL -> form.copy(count = null)
-                }
-                val result = runCatching {
-                    val repeticion = finalForm.toJson()
-                    val device = AlarmasRuntime.deviceId()
-                    val now = Instant.now()
-                    if (alarmaId == null) {
-                        alarmaCreada(
-                            device, now, UuidV7.newId(), titulo.trim(), tipo, hora.trim(),
-                            repeticion, destinatario.trim().ifBlank { null },
-                            remedio.trim().ifBlank { null },
-                            fecha = fecha.ifBlank { null },
-                        )
-                    } else {
-                        alarmaModificada(
-                            device, now, alarmaId, titulo.trim(), tipo, hora.trim(),
-                            repeticion, destinatario.trim().ifBlank { null },
-                            remedio.trim().ifBlank { null },
-                            fecha = fecha.ifBlank { null },
-                        )
-                    }
-                }
-                result.fold(
-                    onSuccess = { event ->
-                        error = null
-                        scope.launch {
-                            services.eventStore.append(listOf(event))
-                            AlarmasRuntime.rescheduleAsync(context)
-                            onDone()
-                        }
-                    },
-                    onFailure = { error = it.message ?: "Datos inválidos" },
-                )
-            },
-        )
     }
+
+    ConfirmSheet(
+        visible = confirmDeactivate,
+        title = "Desactivar alarma",
+        message = "«${titulo.trim()}» deja de sonar. No se borra: su historial de dosis sigue visible.",
+        confirmLabel = "Desactivar",
+        onConfirm = {
+            confirmDeactivate = false
+            val id = alarmaId ?: return@ConfirmSheet
+            scope.launch {
+                services.eventStore.append(
+                    listOf(alarmaDesactivada(AlarmasRuntime.deviceId(), Instant.now(), id, "usuario")),
+                )
+                AlarmasRuntime.rescheduleAsync(context)
+                onDone()
+            }
+        },
+        onDismiss = { confirmDeactivate = false },
+    )
 }
 
 /** Optional start date (SPEC 2.1): empty means "desde ahora". */
@@ -216,7 +286,7 @@ private fun FechaInicio(fecha: String, onChange: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     SectionHeader(title = "Fecha de inicio")
     Row(verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = { open = true }) { Text(fecha.ifBlank { "Desde ahora" }) }
+        TextButton(onClick = { open = true }) { Text(if (fecha.isBlank()) "Desde ahora" else formatFechaEs(fecha)) }
         if (fecha.isNotBlank()) TextButton(onClick = { onChange("") }) { Text("Quitar") }
     }
     if (open) {
@@ -238,8 +308,37 @@ private fun FechaInicio(fecha: String, onChange: (String) -> Unit) {
     }
 }
 
+/** Start time, picked with a Material3 TimePicker; the stored value stays `HH:MM`. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HoraInicio(hora: String, onChange: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    SectionHeader(title = "Hora")
+    TextButton(onClick = { open = true }) { Text(hora.ifBlank { "Elegir hora" }) }
+    if (open) {
+        val parsed = parseHora(hora)
+        val state = rememberTimePickerState(
+            initialHour = parsed?.hour ?: 8,
+            initialMinute = parsed?.minute ?: 0,
+            is24Hour = true,
+        )
+        AlertDialog(
+            onDismissRequest = { open = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    onChange(formatHora(state.hour, state.minute))
+                    open = false
+                }) { Text("Aceptar") }
+            },
+            dismissButton = { TextButton(onClick = { open = false }) { Text("Cancelar") } },
+            text = { TimePicker(state = state) },
+        )
+    }
+}
+
 private enum class Limite { NINGUNO, COUNT, UNTIL }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RepeticionSection(
     form: RepeticionForm,
@@ -248,13 +347,13 @@ private fun RepeticionSection(
     onChange: (RepeticionForm) -> Unit,
 ) {
     SectionHeader(title = "Repetición")
-    Row(horizontalArrangement = Arrangement.spacedBy(com.cauce.core.ui.CauceSpacing.sm)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(CauceSpacing.sm)) {
         listOf(
             null to "Una vez",
             "DAILY" to "Diaria",
             "WEEKLY" to "Semanal",
             "MONTHLY" to "Mensual",
-            "HOURLY" to "Por horas",
+            "HOURLY" to "Horaria",
         ).forEach { (value, label) ->
             Chip(label = label, selected = form.freq == value, onClick = { onChange(form.copy(freq = value)) })
         }
@@ -277,7 +376,7 @@ private fun RepeticionSection(
     when (freq) {
         "WEEKLY" -> {
             Text("Días de la semana", style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(com.cauce.core.ui.CauceSpacing.sm)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(CauceSpacing.sm)) {
                 WEEKDAY_CODES.zip(listOf("L", "M", "X", "J", "V", "S", "D")).forEach { (code, label) ->
                     Chip(
                         label = label,
@@ -329,7 +428,7 @@ private fun RepeticionSection(
             }
             if (form.monthlyModeIsOrdinal) {
                 Column(verticalArrangement = Arrangement.spacedBy(com.cauce.core.ui.CauceSpacing.sm)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(com.cauce.core.ui.CauceSpacing.sm)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(CauceSpacing.sm)) {
                         listOf(1 to "1.º", 2 to "2.º", 3 to "3.º", 4 to "4.º", 5 to "5.º", -1 to "Último")
                             .forEach { (value, label) ->
                                 Chip(
@@ -339,7 +438,7 @@ private fun RepeticionSection(
                                 )
                             }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(com.cauce.core.ui.CauceSpacing.sm)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(CauceSpacing.sm)) {
                         WEEKDAY_CODES.zip(listOf("L", "M", "X", "J", "V", "S", "D")).forEach { (code, label) ->
                             Chip(
                                 label = label,
@@ -354,7 +453,7 @@ private fun RepeticionSection(
     }
 
     SectionHeader(title = "Fin")
-    Row(horizontalArrangement = Arrangement.spacedBy(com.cauce.core.ui.CauceSpacing.sm)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(CauceSpacing.sm)) {
         Chip(label = "Sin fin", selected = limite == Limite.NINGUNO, onClick = { onLimite(Limite.NINGUNO) })
         Chip(label = "N disparos", selected = limite == Limite.COUNT, onClick = { onLimite(Limite.COUNT) })
         Chip(label = "Hasta fecha", selected = limite == Limite.UNTIL, onClick = { onLimite(Limite.UNTIL) })

@@ -8,11 +8,18 @@ import com.cauce.core.events.FeatureModule
 import com.cauce.core.events.projection.Projection
 import com.cauce.feature.alarmas.device.AlarmasRuntime
 import com.cauce.feature.alarmas.device.AlarmNotifications
+import com.cauce.feature.alarmas.ui.AdherenciaScreen
 import com.cauce.feature.alarmas.ui.AlarmEditorScreen
 import com.cauce.feature.alarmas.ui.AlarmListScreen
 import com.cauce.feature.alarmas.ui.HistorialScreen
 
-class AlarmasFeatureModule : FeatureModule {
+/**
+ * [openGoogleAviso] is wired by `:app` (alarmas must not depend on calendario_google): it opens
+ * the aviso editor of a Google meeting series.
+ */
+class AlarmasFeatureModule(
+    private val openGoogleAviso: (NavController, String) -> Unit = { _, _ -> },
+) : FeatureModule {
     override val id: String = "alarmas"
 
     override val eventTypes: Set<String> = setOf(
@@ -39,6 +46,7 @@ class AlarmasFeatureModule : FeatureModule {
                 onNew = { nav.navigate(AlarmasRoutes.NEW) },
                 onEdit = { alarmaId -> nav.navigate(AlarmasRoutes.edit(alarmaId)) },
                 onHistorial = { nav.navigate(AlarmasRoutes.HISTORIAL) },
+                onGoogleAviso = { serieId -> openGoogleAviso(nav, serieId) },
             )
         }
         composable(AlarmasRoutes.NEW) {
@@ -52,6 +60,9 @@ class AlarmasFeatureModule : FeatureModule {
         }
         composable(AlarmasRoutes.HISTORIAL) {
             HistorialScreen(onBack = { nav.popBackStack() })
+        }
+        composable(AlarmasRoutes.ADHERENCIA) {
+            AdherenciaScreen(onBack = { nav.popBackStack() })
         }
     }
 
@@ -77,6 +88,7 @@ object AlarmasRoutes {
     const val NEW = "alarmas/nueva"
     const val EDIT = "alarmas/editar/{alarmaId}"
     const val HISTORIAL = "alarmas/historial"
+    const val ADHERENCIA = "alarmas/adherencia"
 
     fun edit(alarmaId: String): String = "alarmas/editar/$alarmaId"
 }

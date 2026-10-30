@@ -12,9 +12,17 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
@@ -26,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -36,18 +45,20 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cauce.core.events.CauceJson
 import com.cauce.core.events.cauceServices
-import com.cauce.core.ui.BigButton
 import com.cauce.core.ui.Card
 import com.cauce.core.ui.CauceSpacing
 import com.cauce.core.ui.ConfirmSheet
 import com.cauce.core.ui.EmptyState
 import com.cauce.core.ui.ListRow
 import com.cauce.core.ui.Screen
+import com.cauce.core.ui.SectionHeader
 import com.cauce.feature.alarmas.AlarmaActiva
 import com.cauce.feature.alarmas.AlarmasActivas
 import com.cauce.feature.alarmas.alarmaDesactivada
 import com.cauce.feature.alarmas.device.AlarmasRuntime
 import com.cauce.feature.alarmas.describe
+import com.cauce.feature.alarmas.gcalHeadline
+import com.cauce.feature.alarmas.gcalMetas
 import com.cauce.feature.alarmas.isGcalId
 import com.cauce.feature.alarmas.projectionParams
 import com.cauce.feature.alarmas.repeticionFormFromJson
@@ -62,6 +73,7 @@ fun AlarmListScreen(
     onNew: () -> Unit,
     onEdit: (String) -> Unit,
     onHistorial: () -> Unit,
+    onGoogleAviso: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val services = remember { context.cauceServices() }
@@ -69,38 +81,40 @@ fun AlarmListScreen(
     var pendingDeactivate by remember { mutableStateOf<AlarmaActiva?>(null) }
 
     RequestPostNotifications()
-    RequestAlarmPermissions()
 
     val events by services.eventStore
         .observeByTypes(AlarmasRuntime.stateEventTypes)
         .collectAsStateWithLifecycle(initialValue = emptyList())
 
+    val zone = ZoneId.systemDefault()
     val activas = remember(events) {
-        val params = projectionParams(Instant.now(), ZoneId.systemDefault())
+        val params = projectionParams(Instant.now(), zone)
         val json = services.projections.compute(AlarmasActivas.key, events, params)
         CauceJson.output.decodeFromJsonElement(AlarmasActivas.serializer, json)
     }
+    val metas = remember(events) { gcalMetas(events) }
+    val (google, propias) = activas.partition { isGcalId(it.alarmaId) }
+    var googleOpen by rememberSaveable { mutableStateOf(false) }
 
-    Screen(title = "Alarmas") {
-        if (activas.isEmpty()) {
+    Screen(
+        title = "Alarmas",
+        actions = {
+            TextButton(onClick = onNew) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Text("Nueva alarma")
+            }
+        },
+    ) {
+        SyncStatusText()
+        RequestAlarmPermissions()
+        ColorOsReminderCard()
+        if (propias.isEmpty()) {
             EmptyState(
                 title = "Sin alarmas activas",
                 message = "Creá una alarma para que suene acá, aun con el teléfono bloqueado.",
             )
         }
-        activas.forEach { alarma ->
-            if (isGcalId(alarma.alarmaId)) {
-                // Read-only (SPEC 2.10): the aviso is edited in calendario_google's meetings screen.
-                // P1 does not carry the account, so the origin is labeled generically (SPEC §8).
-                ListRow(
-                    title = alarma.titulo,
-                    subtitle = listOf(
-                        "${alarma.hora} · Google Calendar",
-                        "Próximo: ${formatInstantForUi(alarma.proximoDisparo)}",
-                    ).joinToString("\n"),
-                )
-                return@forEach
-            }
+        propias.forEach { alarma ->
             ListRow(
                 title = alarma.titulo,
                 subtitle = listOf(
@@ -116,7 +130,47 @@ fun AlarmListScreen(
                 },
             )
         }
-        BigButton(text = "Nueva alarma", onClick = onNew)
+        if (google.isNotEmpty()) {
+            SectionHeader(
+                title = "Reuniones de Google (${google.size})",
+                modifier = Modifier.clickable { googleOpen = !googleOpen },
+                trailing = {
+                    Icon(
+                        if (googleOpen) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (googleOpen) "Contraer" else "Expandir",
+                    )
+                },
+            )
+        }
+        if (googleOpen) {
+            google.forEach { alarma ->
+                // Read-only (SPEC 2.10): the aviso is edited in calendario_google's screen.
+                val meta = metas[alarma.alarmaId.removePrefix("gcal:")]
+                val aviso = Instant.parse(alarma.proximoDisparo)
+                val headline = if (meta != null) {
+                    gcalHeadline(meta.inicio, meta.todoElDia, aviso, zone)
+                } else {
+                    "Aviso ${formatInstantForUi(alarma.proximoDisparo)}"
+                }
+                ListRow(
+                    title = alarma.titulo,
+                    subtitle = listOf(
+                        headline,
+                        "${meta?.cuenta ?: "Google Calendar"} · ${formatInstantForUi(alarma.proximoDisparo)}",
+                    ).joinToString("\n"),
+                    onClick = meta?.let { m -> { onGoogleAviso(m.serieId) } },
+                    trailing = {
+                        AssistChip(
+                            onClick = { meta?.let { onGoogleAviso(it.serieId) } },
+                            label = { Text("Google") },
+                            leadingIcon = {
+                                Icon(Icons.Default.DateRange, contentDescription = null)
+                            },
+                        )
+                    },
+                )
+            }
+        }
         Row(modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = onHistorial) { Text("Historial de dosis") }
         }
@@ -202,9 +256,7 @@ private fun RequestAlarmPermissions() {
     if (!canFullScreen) {
         PermissionCard(
             title = "Pantalla completa",
-            message = "Sin este permiso la alarma no se muestra sobre la pantalla bloqueada. " +
-                "En ColorOS activa también, en Ajustes > Apps > Cauce: ventanas emergentes, " +
-                "mostrar en pantalla de bloqueo e inicio automático.",
+            message = "Sin este permiso la alarma no se muestra sobre la pantalla bloqueada.",
             action = "Permitir",
             onOpen = {
                 openSettings(
@@ -213,6 +265,37 @@ private fun RequestAlarmPermissions() {
                 )
             },
         )
+    }
+}
+
+/**
+ * SPEC §5: ColorOS has no public API for autostart, popups, lock screen and full screen, so the
+ * list reminds the owner. Shown until dismissed once (flag in SharedPreferences) and again
+ * whenever the full-screen permission is missing.
+ */
+@Composable
+private fun ColorOsReminderCard() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("alarmas_ui", Context.MODE_PRIVATE) }
+    var dismissed by remember { mutableStateOf(prefs.getBoolean("coloros_reminder_dismissed", false)) }
+    var hiddenNow by remember { mutableStateOf(false) }
+    val show = !hiddenNow && (!dismissed || !canUseFullScreenIntent(context))
+    if (!show) return
+    Card {
+        Text("Requisitos del teléfono (ColorOS)", style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = "Para que las alarmas suenen siempre, en Ajustes > Apps > Cauce activa: " +
+                "inicio automático, ventanas emergentes, mostrar en pantalla de bloqueo y " +
+                "pantalla completa (Notificaciones > Alarmas); batería «Sin restricciones».",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = CauceSpacing.xs),
+        )
+        TextButton(onClick = {
+            hiddenNow = true
+            dismissed = true
+            prefs.edit().putBoolean("coloros_reminder_dismissed", true).apply()
+        }) { Text("Entendido") }
     }
 }
 

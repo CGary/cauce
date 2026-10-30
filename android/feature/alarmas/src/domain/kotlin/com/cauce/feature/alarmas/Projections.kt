@@ -301,6 +301,20 @@ internal fun googleAlarmas(events: List<Envelope>, now: Instant, zone: ZoneId): 
     }
 }
 
+/** What the list needs to label a `gcal:` row; P1 does not carry it (SPEC §8). */
+internal data class GcalMeta(
+    val serieId: String,
+    val cuenta: String,
+    val inicio: Instant,
+    val todoElDia: Boolean,
+)
+
+/** `reunion_id` -> origin data, read from the same events P1 folds (no extra event types). */
+internal fun gcalMetas(events: List<Envelope>): Map<String, GcalMeta> =
+    foldReuniones(events).associate {
+        it.reunionId to GcalMeta(it.serieId, it.cuenta, it.inicioAt, it.todoElDia)
+    }
+
 private data class LiveReunion(
     val reunionId: String,
     val serieId: String,

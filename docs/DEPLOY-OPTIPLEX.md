@@ -23,7 +23,43 @@ Cómo se aprovisionó (scripts idempotentes, repo `Scriptorium` en `pc-gary`): `
 2. `server/.env` a partir de `server/.env.example` **sin** `TUNNEL_TOKEN` (no hay dominio todavía). Variables que necesiten secreto se crean en el servidor, nunca se pegan en el chat ni en git.
 3. `docker rm -f whoami && just up` → construye la imagen, publica en `127.0.0.1:8080`, espera `/healthz`; datos en `deploy/data/`.
 4. Verificar: `curl -s localhost:8080/healthz` y luego `curl -s https://$(tunnel-url)/healthz` desde fuera.
-5. Resistencia a reinicios: el compose ya lleva `restart: unless-stopped`; comprobar con `sudo reboot` solo si es barato.
+5. Resistencia a reinicios: ver [Reinicio del servidor](#reinicio-del-servidor).
+
+## Reinicio del servidor
+
+Cauce vuelve solo después de un `sudo reboot`, sin scripts propios, porque:
+
+- `docker.service` y `containerd` están habilitados en systemd, y el contenedor tiene `restart: unless-stopped`: al arrancar, dockerd reinicia **el mismo contenedor** con la misma imagen, sin reconstruir ni recrear.
+- `tailscaled` está habilitado y el Funnel creado con `--bg` se guarda en el estado de Tailscale: al arrancar vuelve a publicar `127.0.0.1:8080`.
+- El servidor Go atiende SIGTERM y cierra limpio (Docker da 10 s). La base está en `deploy/data/`, en el disco raíz.
+
+No hace falta una unidad de systemd con `docker compose up -d`, y no conviene: si la imagen o el compose cambiaron desde el último `just up`, recrearía el contenedor al arrancar, que equivale a un deploy sin revisar. Tampoco hay que pasar a `restart: always`: `unless-stopped` respeta una parada manual.
+
+**Antes de reiniciar**
+
+1. `docker compose ps`: `cauce` debe estar `Up`. Un contenedor parado a mano (`docker stop`, `docker compose stop`) **no** vuelve al reiniciar, y uno borrado (`docker compose down`) necesita `just up`.
+2. `just backup`: no modifica nada y deja `cauce-backup-*.tar.gz` (gitignorado, modo 600) en la raíz del repo.
+3. Que no haya un `just up` ni un build a medias. Reiniciar siempre con `sudo reboot`, nunca cortando la luz.
+
+**Después de reiniciar**
+
+1. `systemctl is-active docker tailscaled` → `active` dos veces; `uname -r` muestra el kernel nuevo.
+2. `docker compose ps` → `cauce` en `Up`; `curl -s 127.0.0.1:8080/healthz` → 200.
+3. `tailscale funnel status` → Funnel on, `proxy http://127.0.0.1:8080`; `curl` a `/healthz` por la URL pública del Funnel → 200.
+4. La consola: `https://cauce-web-2dr.pages.dev/api/projections/alarmas/alarmas_activas` → 200 (pasa por la Pages Function y el Funnel).
+
+**Si algo no levanta**
+
+| Síntoma | Qué hacer |
+|---------|-----------|
+| Docker inactivo | `journalctl -u docker -b`, luego `sudo systemctl start docker` |
+| Contenedor `Exited` | `docker compose logs --tail 100 cauce`, luego `docker compose start cauce` (mismo contenedor) |
+| Contenedor inexistente | `just up` (reconstruye desde `HEAD`; los datos no se tocan) |
+| Funnel apagado | `sudo tailscale funnel --bg 8080` |
+| Tailscale sin sesión | Acción humana: el dueño vuelve a iniciar sesión |
+| Docker o la red fallan con el kernel nuevo | Arrancar el kernel anterior desde GRUB (Debian conserva el previo) y avisar |
+
+Nunca `docker compose down -v`, `just restore`, borrar `deploy/data/` ni tocar `server/.env`. `cloudflared-quick` cambia de URL en cada reinicio; Cauce no depende de él (usa el Funnel) y no se toca.
 
 ## Restricciones
 

@@ -1,0 +1,226 @@
+{
+  "projection": "alarmas.adherencia_tratamiento",
+  "params": {
+    "now": "2026-11-13T11:00:00Z",
+    "tz": "America/La_Paz"
+  },
+  "events": [
+    {
+      "id": "e1",
+      "type": "alarma_creada",
+      "v": 3,
+      "ts": "2026-11-10T12:00:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "titulo": "Kalmx Bruno",
+        "tipo": "remedio",
+        "hora": "08:00",
+        "fecha": "2026-11-11",
+        "repeticion": {
+          "freq": "HOURLY",
+          "interval": 8,
+          "count": 15
+        },
+        "destinatario": "Brno",
+        "remedio": "Kalmx"
+      }
+    },
+    {
+      "id": "e2",
+      "type": "alarma_creada",
+      "v": 3,
+      "ts": "2026-11-11T09:00:00Z",
+      "payload": {
+        "alarma_id": "s1",
+        "titulo": "Dorvex Elsa",
+        "tipo": "remedio",
+        "hora": "06:00",
+        "repeticion": {
+          "freq": "HOURLY",
+          "interval": 8,
+          "count": 15
+        },
+        "destinatario": "Elza",
+        "remedio": "Dorvex"
+      }
+    },
+    {
+      "id": "d1",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-11T12:03:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "destinatario": "Brno",
+        "remedio": "Kalmx",
+        "programada_para": "2026-11-11T12:00:00Z"
+      }
+    },
+    {
+      "id": "d2",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-11T20:04:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "destinatario": "Brno",
+        "remedio": "Kalmx",
+        "programada_para": "2026-11-11T20:00:00Z"
+      }
+    },
+    {
+      "id": "d3",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-12T04:02:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "destinatario": "Brno",
+        "remedio": "Kalmx",
+        "programada_para": "2026-11-12T04:00:00Z"
+      }
+    },
+    {
+      "id": "d4",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-12T12:01:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "destinatario": "Brno",
+        "remedio": "Kalmx",
+        "programada_para": "2026-11-12T12:00:00Z"
+      }
+    },
+    {
+      "id": "d5",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-11T10:02:00Z",
+      "payload": {
+        "alarma_id": "s1",
+        "destinatario": "Elza",
+        "remedio": "Dorvex",
+        "programada_para": "2026-11-11T10:00:00Z"
+      }
+    },
+    {
+      "id": "d6",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-11T18:05:00Z",
+      "payload": {
+        "alarma_id": "s1",
+        "destinatario": "Elza",
+        "remedio": "Dorvex",
+        "programada_para": "2026-11-11T18:00:00Z"
+      }
+    },
+    {
+      "id": "d7",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-12T10:01:00Z",
+      "payload": {
+        "alarma_id": "s1",
+        "destinatario": "Elza",
+        "remedio": "Dorvex",
+        "programada_para": "2026-11-12T10:00:00Z"
+      }
+    },
+    {
+      "id": "e3",
+      "type": "alarma_modificada",
+      "v": 3,
+      "ts": "2026-11-12T15:00:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "titulo": "Kalmix Bruno",
+        "tipo": "remedio",
+        "hora": "08:00",
+        "fecha": "2026-11-11",
+        "repeticion": {
+          "freq": "HOURLY",
+          "interval": 8,
+          "count": 15
+        },
+        "destinatario": "Bruno",
+        "remedio": "Kalmix"
+      }
+    },
+    {
+      "id": "e4",
+      "type": "alarma_modificada",
+      "v": 3,
+      "ts": "2026-11-12T15:05:00Z",
+      "payload": {
+        "alarma_id": "s1",
+        "titulo": "Dorvex Elsa",
+        "tipo": "remedio",
+        "hora": "06:00",
+        "repeticion": {
+          "freq": "HOURLY",
+          "interval": 8,
+          "count": 15
+        },
+        "destinatario": "Elsa",
+        "remedio": "Dorvex 5 mg"
+      }
+    },
+    {
+      "id": "d8",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-12T20:02:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "destinatario": "Bruno",
+        "remedio": "Kalmix",
+        "programada_para": "2026-11-12T20:00:00Z"
+      }
+    },
+    {
+      "id": "i1",
+      "type": "alarma_atendida",
+      "v": 1,
+      "ts": "2026-11-13T04:02:00Z",
+      "payload": {
+        "alarma_id": "c1",
+        "programada_para": "2026-11-13T04:00:00Z",
+        "accion": "ignorada"
+      }
+    },
+    {
+      "id": "d9",
+      "type": "dosis_dada",
+      "v": 1,
+      "ts": "2026-11-13T10:03:00Z",
+      "payload": {
+        "alarma_id": "s1",
+        "destinatario": "Elsa",
+        "remedio": "Dorvex 5 mg",
+        "programada_para": "2026-11-13T10:00:00Z"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "alarma_id": "c1",
+      "destinatario": "Bruno",
+      "remedio": "Kalmix",
+      "dosis_esperadas": 6,
+      "dosis_dadas": 5,
+      "ignoradas": 1,
+      "ultima_dosis": "2026-11-12T20:02:00Z"
+    },
+    {
+      "alarma_id": "s1",
+      "destinatario": "Elsa",
+      "remedio": "Dorvex 5 mg",
+      "dosis_esperadas": 7,
+      "dosis_dadas": 4,
+      "ignoradas": 0,
+      "ultima_dosis": "2026-11-13T10:03:00Z"
+    }
+  ]
+}

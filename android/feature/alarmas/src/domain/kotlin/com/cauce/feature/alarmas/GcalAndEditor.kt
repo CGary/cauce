@@ -123,11 +123,43 @@ internal data class EditorPrefill(
  */
 internal fun editorPrefill(alarm: Alarm, row: AlarmaActiva?, zone: ZoneId): EditorPrefill {
     val form = repeticionFormFromJson(alarm.repeticion)
-    if (row == null) {
+    // A remedio is only corrected (SPEC 2.2): its schedule is shown exactly as stored.
+    if (row == null || isScheduleLocked(alarm)) {
         return EditorPrefill(alarm.horaRaw, alarm.fecha?.toString().orEmpty(), form)
     }
     val next = Instant.parse(row.proximoDisparo).atZone(zone)
     val hora = if (form.freq == "HOURLY") formatLocalHora(next.toInstant(), zone) else alarm.horaRaw
     val count = if (form.count != null && row.restantes != null) row.restantes else form.count
     return EditorPrefill(hora, next.toLocalDate().toString(), form.copy(count = count))
+}
+
+/**
+ * SPEC 2.2 (owner's decision): an existing `remedio` is never modified, only corrected. Its tipo
+ * and schedule are read-only in the editor; only título, remedio and destinatario change.
+ */
+internal fun isScheduleLocked(alarm: Alarm?): Boolean = alarm != null && alarm.tipo == "remedio"
+
+/** Hint shown under the locked schedule of a `remedio` (SPEC 2.2). */
+internal const val REMEDIO_LOCKED_HINT =
+    "Para cambiar el horario o el remedio, desactivá esta alarma y creá otra."
+
+/**
+ * The `alarma_modificada` of a remedio correction (SPEC 2.2): the corrected texts plus the stored
+ * calendar verbatim (same `fecha` or none, same `hora`, same `repeticion` with its original
+ * `count`), so P1 `restantes` and P2 `dosis_esperadas` do not move.
+ */
+internal fun remedioCorrection(
+    deviceId: String,
+    ts: Instant,
+    alarm: Alarm,
+    titulo: String,
+    destinatario: String,
+    remedio: String,
+): Envelope {
+    require(isScheduleLocked(alarm)) { "solo una alarma remedio se corrige así" }
+    return alarmaModificada(
+        deviceId, ts, alarm.id, titulo.trim(), alarm.tipo, alarm.horaRaw, alarm.repeticion,
+        destinatario.trim().ifBlank { null }, remedio.trim().ifBlank { null },
+        fecha = alarm.fecha?.toString(),
+    )
 }

@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Field, inputClass } from '../../../core/ui'
 import type { AlarmaFormState } from '../model'
-import type { AlarmaPayload } from '../types'
+import type { AlarmaActiva, AlarmaPayload } from '../types'
 import {
   HOURLY_PRESETS,
   MAX_COUNT,
   MAX_INTERVAL,
+  REMEDIO_LOCKED_HINT,
   WEEKDAY_LABEL,
   WEEKDAYS,
   dosesForDays,
   formToPayload,
+  remedioCorrectionPayload,
+  validateCorrection,
   validateForm,
 } from '../model'
 
@@ -70,6 +73,7 @@ export function AlarmaForm({
   alarmaId,
   initial,
   pending,
+  locked,
   onSubmit,
   onCancel,
 }: {
@@ -77,6 +81,11 @@ export function AlarmaForm({
   alarmaId: string
   initial: AlarmaFormState
   pending: boolean
+  /**
+   * Fila de P1 de un remedio que se corrige (SPEC 2.2): tipo y calendario quedan de solo
+   * lectura y el evento reenvía el calendario de esta fila tal cual.
+   */
+  locked?: AlarmaActiva
   onSubmit: (payload: AlarmaPayload) => void
   onCancel: () => void
 }) {
@@ -104,13 +113,13 @@ export function AlarmaForm({
       className="flex flex-col gap-5"
       onSubmit={(event) => {
         event.preventDefault()
-        const message = validateForm(form)
+        const message = locked ? validateCorrection(form) : validateForm(form)
         if (message) {
           setError(message)
           return
         }
         setError(null)
-        onSubmit(formToPayload(form, alarmaId))
+        onSubmit(locked ? remedioCorrectionPayload(locked, form) : formToPayload(form, alarmaId))
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
@@ -132,6 +141,7 @@ export function AlarmaForm({
               {...c}
               className={inputClass}
               value={form.tipo}
+              disabled={locked !== undefined}
               onChange={(event) => {
                 const tipo = event.target.value as AlarmaFormState['tipo']
                 // Un remedio casi siempre es "cada N horas": se propone cada 8 h si aún no hay repetición.
@@ -151,13 +161,14 @@ export function AlarmaForm({
         </Field>
         <Field
           label="Fecha de inicio"
-          hint="Vacío = desde ahora."
+          hint={locked ? undefined : 'Vacío = desde ahora.'}
           error={errorFor('fecha')}
         >
           {(c) => (
             <input
               {...c}
               className={inputClass}
+              disabled={locked !== undefined}
               type="date"
               value={form.fecha}
               onChange={(event) => set('fecha', event.target.value)}
@@ -175,6 +186,7 @@ export function AlarmaForm({
               className={inputClass}
               type="time"
               step={60}
+              disabled={locked !== undefined}
               value={form.hora}
               onChange={(event) => set('hora', event.target.value)}
             />
@@ -186,6 +198,7 @@ export function AlarmaForm({
               {...c}
               className={inputClass}
               value={form.freq}
+              disabled={locked !== undefined}
               onChange={(event) => {
                 const freq = event.target.value as AlarmaFormState['freq']
                 // El intervalo vuelve al valor visible de la nueva frecuencia: vacío (= 1) en
@@ -209,253 +222,265 @@ export function AlarmaForm({
           )}
         </Field>
       </div>
-      {form.freq === 'HOURLY' && (
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1.5 text-caption font-medium">Cada</legend>
-          <div className="flex flex-wrap gap-2">
-            {HOURLY_PRESETS.map((hours) => (
-              <label key={hours} className={segmentClass}>
+      {locked && (
+        <p role="note" className="text-caption text-muted">
+          {REMEDIO_LOCKED_HINT}
+        </p>
+      )}
+      {/* `contents`: sin caja propia; solo desactiva el resto del calendario de un remedio. */}
+      <fieldset disabled={locked !== undefined} className="contents">
+        {form.freq === 'HOURLY' && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1.5 text-caption font-medium">Cada</legend>
+            <div className="flex flex-wrap gap-2">
+              {HOURLY_PRESETS.map((hours) => (
+                <label key={hours} className={segmentClass}>
+                  <input
+                    type="radio"
+                    name="hourly-interval"
+                    className="sr-only"
+                    checked={!otherHours && form.interval === hours}
+                    onChange={() => {
+                      setOtherHours(false)
+                      set('interval', hours)
+                    }}
+                  />
+                  {hours} h
+                </label>
+              ))}
+              <label className={segmentClass}>
                 <input
                   type="radio"
                   name="hourly-interval"
                   className="sr-only"
-                  checked={!otherHours && form.interval === hours}
-                  onChange={() => {
-                    setOtherHours(false)
-                    set('interval', hours)
-                  }}
+                  checked={otherHours}
+                  onChange={() => setOtherHours(true)}
                 />
-                {hours} h
+                Otro
               </label>
-            ))}
-            <label className={segmentClass}>
-              <input
-                type="radio"
-                name="hourly-interval"
-                className="sr-only"
-                checked={otherHours}
-                onChange={() => setOtherHours(true)}
-              />
-              Otro
-            </label>
-          </div>
-          {otherHours && (
-            <Field label="Horas" error={errorFor('interval')} className="w-36">
-              {(c) => (
-                <input
-                  {...c}
-                  className={inputClass}
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={MAX_INTERVAL}
-                  value={form.interval}
-                  onChange={(event) => set('interval', event.target.value)}
-                />
-              )}
-            </Field>
-          )}
-          {!otherHours && errorField === 'interval' && (
-            <p className="text-caption font-medium text-danger-ink">⚠ {error}</p>
-          )}
-        </fieldset>
-      )}
-      {form.freq !== 'una_vez' && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {form.freq !== 'HOURLY' && (
-            <Field label="Intervalo" hint={INTERVAL_HINT[form.freq]} error={errorFor('interval')}>
-              {(c) => (
-                <input
-                  {...c}
-                  className={inputClass}
-                  type="number"
-                  min={1}
-                  max={MAX_INTERVAL}
-                  value={form.interval}
-                  placeholder="1"
-                  onChange={(event) => set('interval', event.target.value)}
-                />
-              )}
-            </Field>
-          )}
-          <Field label={form.freq === 'HOURLY' ? 'Duración' : 'Límite'}>
-            {(c) => (
-              <select
-                {...c}
-                className={inputClass}
-                value={form.limit}
-                onChange={(event) => set('limit', event.target.value as AlarmaFormState['limit'])}
-              >
-                <option value="none">Sin fin</option>
-                {form.freq === 'HOURLY' && <option value="days">Por días</option>}
-                <option value="count">
-                  {form.freq === 'HOURLY' ? 'Cantidad de tomas' : 'Cantidad'}
-                </option>
-                <option value="until">Hasta una fecha</option>
-              </select>
+            </div>
+            {otherHours && (
+              <Field label="Horas" error={errorFor('interval')} className="w-36">
+                {(c) => (
+                  <input
+                    {...c}
+                    className={inputClass}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_INTERVAL}
+                    value={form.interval}
+                    onChange={(event) => set('interval', event.target.value)}
+                  />
+                )}
+              </Field>
             )}
-          </Field>
-          {form.limit === 'days' && form.freq === 'HOURLY' && (
-            <Field label="Días" hint={dosesHint(form.dias, form.interval)} error={errorFor('dias')}>
-              {(c) => (
-                <input
-                  {...c}
-                  className={inputClass}
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  value={form.dias}
-                  placeholder="5"
-                  onChange={(event) => set('dias', event.target.value)}
-                />
-              )}
-            </Field>
-          )}
-          {form.limit === 'count' && (
-            <Field label="Cantidad" error={errorFor('count')}>
-              {(c) => (
-                <input
-                  {...c}
-                  className={inputClass}
-                  type="number"
-                  min={1}
-                  max={MAX_COUNT}
-                  value={form.count}
-                  onChange={(event) => set('count', event.target.value)}
-                />
-              )}
-            </Field>
-          )}
-          {form.limit === 'until' && (
-            <Field label="Hasta" hint="Incluye ese día." error={errorFor('until')}>
-              {(c) => (
-                <input
-                  {...c}
-                  className={inputClass}
-                  type="date"
-                  value={form.until}
-                  onChange={(event) => set('until', event.target.value)}
-                />
-              )}
-            </Field>
-          )}
-        </div>
-      )}
-      {form.freq === 'WEEKLY' && (
-        <fieldset className="flex flex-wrap gap-x-5 gap-y-1">
-          <legend className="mb-1 text-caption font-medium">Días</legend>
-          {WEEKDAYS.map((day) => (
-            <Choice key={day}>
-              <input
-                type="checkbox"
-                className={checkClass}
-                checked={form.weekdays.includes(day)}
-                onChange={(event) =>
-                  set(
-                    'weekdays',
-                    event.target.checked
-                      ? [...form.weekdays, day]
-                      : form.weekdays.filter((item) => item !== day),
-                  )
-                }
-              />
-              {WEEKDAY_LABEL[day]}
-            </Choice>
-          ))}
-        </fieldset>
-      )}
-      {form.freq === 'MONTHLY' && (
-        <fieldset className="flex flex-col gap-1 rounded-control border border-line p-4">
-          <legend className="px-1 text-caption font-medium">Mensual</legend>
-          <p className="text-caption text-muted">Un mes sin ese día se salta.</p>
-          <Choice>
-            <input
-              type="radio"
-              name="monthly-mode"
-              className={checkClass}
-              checked={form.monthlyMode === 'bymonthday'}
-              onChange={() => set('monthlyMode', 'bymonthday')}
-            />
-            Día del mes
-          </Choice>
-          {form.monthlyMode === 'bymonthday' && (
-            <div className="flex flex-wrap items-end gap-4 pb-2 pl-8">
-              <Field label="Día" error={errorFor('bymonthday')} className="w-28">
+            {!otherHours && errorField === 'interval' && (
+              <p className="text-caption font-medium text-danger-ink">⚠ {error}</p>
+            )}
+          </fieldset>
+        )}
+        {form.freq !== 'una_vez' && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {form.freq !== 'HOURLY' && (
+              <Field label="Intervalo" hint={INTERVAL_HINT[form.freq]} error={errorFor('interval')}>
                 {(c) => (
                   <input
                     {...c}
                     className={inputClass}
                     type="number"
                     min={1}
-                    max={31}
-                    disabled={form.bymonthday === '-1'}
-                    value={form.bymonthday === '-1' ? '' : form.bymonthday}
-                    onChange={(event) => set('bymonthday', event.target.value)}
+                    max={MAX_INTERVAL}
+                    value={form.interval}
+                    placeholder="1"
+                    onChange={(event) => set('interval', event.target.value)}
                   />
                 )}
               </Field>
-              <Choice>
+            )}
+            <Field label={form.freq === 'HOURLY' ? 'Duración' : 'Límite'}>
+              {(c) => (
+                <select
+                  {...c}
+                  className={inputClass}
+                  value={form.limit}
+                  onChange={(event) => set('limit', event.target.value as AlarmaFormState['limit'])}
+                >
+                  <option value="none">Sin fin</option>
+                  {form.freq === 'HOURLY' && <option value="days">Por días</option>}
+                  <option value="count">
+                    {form.freq === 'HOURLY' ? 'Cantidad de tomas' : 'Cantidad'}
+                  </option>
+                  <option value="until">Hasta una fecha</option>
+                </select>
+              )}
+            </Field>
+            {form.limit === 'days' && form.freq === 'HOURLY' && (
+              <Field
+                label="Días"
+                hint={dosesHint(form.dias, form.interval)}
+                error={errorFor('dias')}
+              >
+                {(c) => (
+                  <input
+                    {...c}
+                    className={inputClass}
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={form.dias}
+                    placeholder="5"
+                    onChange={(event) => set('dias', event.target.value)}
+                  />
+                )}
+              </Field>
+            )}
+            {form.limit === 'count' && (
+              <Field label="Cantidad" error={errorFor('count')}>
+                {(c) => (
+                  <input
+                    {...c}
+                    className={inputClass}
+                    type="number"
+                    min={1}
+                    max={MAX_COUNT}
+                    value={form.count}
+                    onChange={(event) => set('count', event.target.value)}
+                  />
+                )}
+              </Field>
+            )}
+            {form.limit === 'until' && (
+              <Field label="Hasta" hint="Incluye ese día." error={errorFor('until')}>
+                {(c) => (
+                  <input
+                    {...c}
+                    className={inputClass}
+                    type="date"
+                    value={form.until}
+                    onChange={(event) => set('until', event.target.value)}
+                  />
+                )}
+              </Field>
+            )}
+          </div>
+        )}
+        {form.freq === 'WEEKLY' && (
+          <fieldset className="flex flex-wrap gap-x-5 gap-y-1">
+            <legend className="mb-1 text-caption font-medium">Días</legend>
+            {WEEKDAYS.map((day) => (
+              <Choice key={day}>
                 <input
                   type="checkbox"
                   className={checkClass}
-                  checked={form.bymonthday === '-1'}
-                  onChange={(event) => set('bymonthday', event.target.checked ? '-1' : '1')}
+                  checked={form.weekdays.includes(day)}
+                  onChange={(event) =>
+                    set(
+                      'weekdays',
+                      event.target.checked
+                        ? [...form.weekdays, day]
+                        : form.weekdays.filter((item) => item !== day),
+                    )
+                  }
                 />
-                Último día
+                {WEEKDAY_LABEL[day]}
               </Choice>
-            </div>
-          )}
-          <Choice>
-            <input
-              type="radio"
-              name="monthly-mode"
-              className={checkClass}
-              checked={form.monthlyMode === 'byday'}
-              onChange={() => set('monthlyMode', 'byday')}
-            />
-            Día de la semana
-          </Choice>
-          {form.monthlyMode === 'byday' && (
-            <div className="grid gap-4 pb-2 pl-8 sm:grid-cols-2">
-              <Field label="Ordinal" error={errorFor('ordinal')}>
-                {(c) => (
-                  <select
-                    {...c}
-                    className={inputClass}
-                    value={form.ordinal}
-                    onChange={(event) => set('ordinal', event.target.value)}
-                  >
-                    <option value="1">1.º</option>
-                    <option value="2">2.º</option>
-                    <option value="3">3.º</option>
-                    <option value="4">4.º</option>
-                    <option value="5">5.º</option>
-                    <option value="-1">Último</option>
-                  </select>
-                )}
-              </Field>
-              <Field label="Día">
-                {(c) => (
-                  <select
-                    {...c}
-                    className={inputClass}
-                    value={form.ordinalDay}
-                    onChange={(event) =>
-                      set('ordinalDay', event.target.value as AlarmaFormState['ordinalDay'])
-                    }
-                  >
-                    {WEEKDAYS.map((day) => (
-                      <option key={day} value={day}>
-                        {WEEKDAY_LABEL[day]}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </Field>
-            </div>
-          )}
-        </fieldset>
-      )}
+            ))}
+          </fieldset>
+        )}
+        {form.freq === 'MONTHLY' && (
+          <fieldset className="flex flex-col gap-1 rounded-control border border-line p-4">
+            <legend className="px-1 text-caption font-medium">Mensual</legend>
+            <p className="text-caption text-muted">Un mes sin ese día se salta.</p>
+            <Choice>
+              <input
+                type="radio"
+                name="monthly-mode"
+                className={checkClass}
+                checked={form.monthlyMode === 'bymonthday'}
+                onChange={() => set('monthlyMode', 'bymonthday')}
+              />
+              Día del mes
+            </Choice>
+            {form.monthlyMode === 'bymonthday' && (
+              <div className="flex flex-wrap items-end gap-4 pb-2 pl-8">
+                <Field label="Día" error={errorFor('bymonthday')} className="w-28">
+                  {(c) => (
+                    <input
+                      {...c}
+                      className={inputClass}
+                      type="number"
+                      min={1}
+                      max={31}
+                      disabled={form.bymonthday === '-1'}
+                      value={form.bymonthday === '-1' ? '' : form.bymonthday}
+                      onChange={(event) => set('bymonthday', event.target.value)}
+                    />
+                  )}
+                </Field>
+                <Choice>
+                  <input
+                    type="checkbox"
+                    className={checkClass}
+                    checked={form.bymonthday === '-1'}
+                    onChange={(event) => set('bymonthday', event.target.checked ? '-1' : '1')}
+                  />
+                  Último día
+                </Choice>
+              </div>
+            )}
+            <Choice>
+              <input
+                type="radio"
+                name="monthly-mode"
+                className={checkClass}
+                checked={form.monthlyMode === 'byday'}
+                onChange={() => set('monthlyMode', 'byday')}
+              />
+              Día de la semana
+            </Choice>
+            {form.monthlyMode === 'byday' && (
+              <div className="grid gap-4 pb-2 pl-8 sm:grid-cols-2">
+                <Field label="Ordinal" error={errorFor('ordinal')}>
+                  {(c) => (
+                    <select
+                      {...c}
+                      className={inputClass}
+                      value={form.ordinal}
+                      onChange={(event) => set('ordinal', event.target.value)}
+                    >
+                      <option value="1">1.º</option>
+                      <option value="2">2.º</option>
+                      <option value="3">3.º</option>
+                      <option value="4">4.º</option>
+                      <option value="5">5.º</option>
+                      <option value="-1">Último</option>
+                    </select>
+                  )}
+                </Field>
+                <Field label="Día">
+                  {(c) => (
+                    <select
+                      {...c}
+                      className={inputClass}
+                      value={form.ordinalDay}
+                      onChange={(event) =>
+                        set('ordinalDay', event.target.value as AlarmaFormState['ordinalDay'])
+                      }
+                    >
+                      {WEEKDAYS.map((day) => (
+                        <option key={day} value={day}>
+                          {WEEKDAY_LABEL[day]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </Field>
+              </div>
+            )}
+          </fieldset>
+        )}
+      </fieldset>
       {form.tipo === 'remedio' && (
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Destinatario" error={errorFor('destinatario')}>

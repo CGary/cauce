@@ -141,18 +141,32 @@ export function localTime(instant: string, tz: string = browserTimeZone()): stri
   return `${get('hour')}:${get('minute')}`
 }
 
+/**
+ * SPEC 2.2 (decisión del dueño): una alarma `remedio` existente no se modifica, solo se
+ * corrige. Su tipo y su calendario son de solo lectura; cambian título, remedio y destinatario.
+ */
+export function isScheduleLocked(row: AlarmaActiva): boolean {
+  return row.tipo === 'remedio' && !isGoogleCalendar(row.alarma_id)
+}
+
+/** Aviso bajo el calendario bloqueado de un remedio (SPEC 2.2). */
+export const REMEDIO_LOCKED_HINT =
+  'Un remedio no se modifica: solo se corrigen título, remedio y destinatario. Para cambiar el horario o pasar a otro remedio, eliminá esta alarma y creá otra.'
+
 export function activaToForm(
   row: AlarmaActiva,
   extra?: { destinatario?: string; remedio?: string },
   tz: string = browserTimeZone(),
 ): AlarmaFormState {
   const form = emptyForm()
+  // Un remedio muestra su calendario tal como está (SPEC 2.2); los demás tipos se reanclan.
+  const locked = isScheduleLocked(row)
   form.titulo = row.titulo
   form.tipo = isTipo(row.tipo) ? row.tipo : 'otro'
   form.hora = row.hora
-  // P1 no trae `fecha`: la mejor fecha que conoce es la del próximo disparo. Para
-  // una puntual es su fecha; para una serie la reancla en el próximo disparo.
-  form.fecha = localDate(row.proximo_disparo, tz)
+  // Fuera de un remedio, la fecha es la del próximo disparo: para una puntual es su
+  // fecha; una serie se reancla en el próximo disparo (SPEC §8, agente).
+  form.fecha = locked ? (row.fecha ?? '') : localDate(row.proximo_disparo, tz)
   form.destinatario = extra?.destinatario ?? ''
   form.remedio = extra?.remedio ?? ''
   const rep = row.repeticion
@@ -161,13 +175,15 @@ export function activaToForm(
   // Un HOURLY se ancla en la hora del próximo disparo, no en la hora original:
   // con `restantes` como count, anclar más temprano perdería una dosis y anclar
   // más tarde se saltaría otra. Así `fecha` + `hora` es `proximo_disparo`.
-  if (rep.freq === 'HOURLY') form.hora = localTime(row.proximo_disparo, tz)
+  if (rep.freq === 'HOURLY' && !locked) form.hora = localTime(row.proximo_disparo, tz)
   // Un HOURLY sin `interval` es cada 1 h: se muestra explícito, porque vacío no es válido.
   form.interval =
     rep.interval !== undefined ? String(rep.interval) : rep.freq === 'HOURLY' ? '1' : ''
   // Al reanclar en el próximo disparo, la serie conserva solo los disparos que
   // faltan: `restantes` es el `count` nuevo (si no hay `count`, no hay límite).
-  const count = rep.count !== undefined ? (row.restantes ?? rep.count) : undefined
+  // Un remedio no se reancla: muestra el `count` original.
+  const count =
+    rep.count !== undefined ? (locked ? rep.count : (row.restantes ?? rep.count)) : undefined
   const hours = count !== undefined && rep.freq === 'HOURLY' ? count * (rep.interval ?? 1) : 0
   if (count !== undefined && hours > 0 && hours % 24 === 0) {
     form.limit = 'days'
@@ -243,15 +259,8 @@ export function validateForm(form: AlarmaFormState, now: Date = new Date()): str
   if (form.fecha.trim() !== '' && !isDate(form.fecha.trim())) {
     return 'La fecha de inicio tiene que ser una fecha AAAA-MM-DD'
   }
-  if (form.tipo === 'remedio') {
-    const destinatario = form.destinatario.trim()
-    const remedio = form.remedio.trim()
-    if (destinatario.length < 1 || destinatario.length > 60) {
-      return 'El destinatario tiene que tener entre 1 y 60 caracteres'
-    }
-    if (remedio.length < 1 || remedio.length > 120)
-      return 'El remedio tiene que tener entre 1 y 120 caracteres'
-  }
+  const textos = validateRemedioTexts(form)
+  if (textos) return textos
   const fecha = form.fecha.trim()
   const today = localDate(now.toISOString())
   if (form.freq === 'una_vez') {
@@ -293,6 +302,52 @@ export function validateForm(form: AlarmaFormState, now: Date = new Date()): str
     }
   }
   return null
+}
+
+function validateRemedioTexts(form: AlarmaFormState): string | null {
+  if (form.tipo !== 'remedio') return null
+  const destinatario = form.destinatario.trim()
+  const remedio = form.remedio.trim()
+  if (destinatario.length < 1 || destinatario.length > 60) {
+    return 'El destinatario tiene que tener entre 1 y 60 caracteres'
+  }
+  if (remedio.length < 1 || remedio.length > 120)
+    return 'El remedio tiene que tener entre 1 y 120 caracteres'
+  return null
+}
+
+/**
+ * Valida la corrección de un remedio (SPEC 2.2): solo los textos. El calendario no se
+ * edita, así que una `fecha` de inicio pasada o un «Hasta» ya cumplido no la frenan.
+ */
+export function validateCorrection(form: AlarmaFormState): string | null {
+  const titulo = form.titulo.trim()
+  if (titulo.length < 1 || titulo.length > 120)
+    return 'El título tiene que tener entre 1 y 120 caracteres'
+  return validateRemedioTexts({ ...form, tipo: 'remedio' })
+}
+
+/**
+ * El `alarma_modificada` de la corrección de un remedio (SPEC 2.2): los textos corregidos y el
+ * calendario tal como viene en la fila de P1 (misma `fecha` o ninguna, misma `hora`, misma
+ * `repeticion` con su `count` original), así `restantes` (P1) y la adherencia (P2) no cambian.
+ */
+export function remedioCorrectionPayload(row: AlarmaActiva, form: AlarmaFormState): AlarmaPayload {
+  if (!isScheduleLocked(row)) throw new Error('Solo una alarma remedio se corrige así')
+  const error = validateCorrection(form)
+  if (error) throw new Error(error)
+  const payload: AlarmaPayload = {
+    alarma_id: row.alarma_id,
+    titulo: form.titulo.trim(),
+    tipo: 'remedio',
+    hora: row.hora,
+    // Copia tal cual: el servidor ya la validó al entrar; no se reconstruye desde el formulario.
+    repeticion: row.repeticion ? ({ ...row.repeticion } as Repeticion) : null,
+    destinatario: form.destinatario.trim(),
+    remedio: form.remedio.trim(),
+  }
+  if (row.fecha !== undefined) payload.fecha = row.fecha
+  return payload
 }
 
 /** Disparos de un HOURLY que cubren `dias` días: 8 h × 5 días = 15. Redondea hacia arriba. */

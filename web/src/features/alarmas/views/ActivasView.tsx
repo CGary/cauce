@@ -25,6 +25,7 @@ import {
   V_ALARMA_DESACTIVADA,
   V_ALARMA_MODIFICADA,
   activaToForm,
+  isScheduleLocked,
   bulkToPayload,
   desactivadaPayload,
   emptyForm,
@@ -42,7 +43,13 @@ import { TipoChip } from './TipoChip'
 
 type ImportResult = { ok: string | null; errors: string[] }
 
-type Editing = { mode: 'crear' | 'editar'; alarmaId: string; initial: AlarmaFormState }
+type Editing = {
+  mode: 'crear' | 'editar'
+  alarmaId: string
+  initial: AlarmaFormState
+  /** Fila de P1 de un remedio: se corrige sin tocar su calendario (SPEC 2.2). */
+  locked?: AlarmaActiva
+}
 
 function readFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -285,6 +292,7 @@ export default function ActivasView() {
                   mode: 'editar',
                   alarmaId: row.alarma_id,
                   initial: activaToForm(row, extra, tz),
+                  locked: isScheduleLocked(row) ? row : undefined,
                 })
               }}
             >
@@ -590,6 +598,7 @@ export default function ActivasView() {
               alarmaId={editing.alarmaId}
               initial={editing.initial}
               pending={push.isPending}
+              locked={editing.locked}
               onSubmit={onSave}
               onCancel={() => setEditing(null)}
             />

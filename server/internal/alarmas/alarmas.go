@@ -330,11 +330,15 @@ type AlarmasActivas struct{}
 
 func (AlarmasActivas) Key() string { return "alarmas.alarmas_activas" }
 
+// alarmaActiva is one P1 row. Fecha is the vigente state's `fecha`,
+// verbatim, omitted when it has none (SPEC section 4 P1): an editor needs it
+// to resend the calendar unchanged (rule 2.2).
 type alarmaActiva struct {
 	AlarmaID       string      `json:"alarma_id"`
 	Titulo         string      `json:"titulo"`
 	Tipo           string      `json:"tipo"`
 	Hora           string      `json:"hora"`
+	Fecha          string      `json:"fecha,omitempty"`
 	Repeticion     *repeticion `json:"repeticion"`
 	ProximoDisparo string      `json:"proximo_disparo"`
 	Restantes      *int        `json:"restantes,omitempty"`
@@ -376,6 +380,7 @@ func (AlarmasActivas) Run(events []event.Envelope, params projection.Params) (an
 			Titulo:         st.Titulo,
 			Tipo:           st.Tipo,
 			Hora:           st.Hora,
+			Fecha:          st.Fecha,
 			Repeticion:     st.Repeticion,
 			ProximoDisparo: proximo.UTC().Format(time.RFC3339),
 			Restantes:      restantes,

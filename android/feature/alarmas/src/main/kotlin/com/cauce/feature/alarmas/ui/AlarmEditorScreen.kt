@@ -58,6 +58,10 @@ import com.cauce.feature.alarmas.AlarmasActivas
 import com.cauce.feature.alarmas.EditorPrefill
 import com.cauce.feature.alarmas.RepeticionForm
 import com.cauce.feature.alarmas.editorPrefill
+import com.cauce.feature.alarmas.REMEDIO_LOCKED_HINT
+import com.cauce.feature.alarmas.describe
+import com.cauce.feature.alarmas.isScheduleLocked
+import com.cauce.feature.alarmas.remedioCorrection
 import com.cauce.feature.alarmas.isGcalId
 import com.cauce.feature.alarmas.projectionParams
 import com.cauce.feature.alarmas.WEEKDAY_CODES
@@ -120,6 +124,8 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
     var limite by remember { mutableStateOf(Limite.NINGUNO) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmDeactivate by remember { mutableStateOf(false) }
+    // SPEC 2.2: an existing remedio is only corrected; its tipo and schedule are read-only.
+    val locked = alarmaId != null && isScheduleLocked(loadedAlarm)
 
     LaunchedEffect(existing) {
         val prefill = existing ?: return@LaunchedEffect
@@ -146,9 +152,15 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
                 Limite.UNTIL -> form.copy(count = null)
             }
             val result = runCatching {
-                val repeticion = finalForm.toJson()
                 val device = AlarmasRuntime.deviceId()
                 val now = Instant.now()
+                val lockedAlarm = loadedAlarm
+                if (locked && lockedAlarm != null) {
+                    return@runCatching remedioCorrection(
+                        device, now, lockedAlarm, titulo, destinatario, remedio,
+                    )
+                }
+                val repeticion = finalForm.toJson()
                 if (alarmaId == null) {
                     alarmaCreada(
                         device, now, UuidV7.newId(), titulo.trim(), tipo, hora.trim(),
@@ -218,7 +230,9 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
             SectionHeader(title = "Tipo")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(CauceSpacing.sm)) {
                 listOf("remedio" to "Remedio", "reunion" to "Reunión", "otro" to "Otro").forEach { (value, label) ->
-                    Chip(label = label, selected = tipo == value, onClick = { tipo = value })
+                    if (!locked || tipo == value) {
+                        Chip(label = label, selected = tipo == value, onClick = { if (!locked) tipo = value })
+                    }
                 }
             }
 
@@ -239,11 +253,15 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
                 )
             }
 
-            HoraInicio(hora = hora, onChange = { hora = it })
+            if (locked) {
+                LockedSchedule(hora = hora, fecha = fecha, form = form)
+            } else {
+                HoraInicio(hora = hora, onChange = { hora = it })
 
-            FechaInicio(fecha = fecha, onChange = { fecha = it })
+                FechaInicio(fecha = fecha, onChange = { fecha = it })
 
-            RepeticionSection(form = form, limite = limite, onLimite = { limite = it }, onChange = { form = it })
+                RepeticionSection(form = form, limite = limite, onLimite = { limite = it }, onChange = { form = it })
+            }
 
             error?.let {
                 Text(text = it, color = MaterialTheme.colorScheme.error)
@@ -279,6 +297,20 @@ fun AlarmEditorScreen(alarmaId: String?, onDone: () -> Unit) {
             dismissButton = { TextButton(onClick = { confirmDeactivate = false }) { Text("Cancelar") } },
         )
     }
+}
+
+/** Read-only schedule of a remedio being corrected (SPEC 2.2), with the hint. */
+@Composable
+private fun LockedSchedule(hora: String, fecha: String, form: RepeticionForm) {
+    SectionHeader(title = "Horario")
+    Text("Hora: $hora")
+    Text("Fecha de inicio: ${if (fecha.isBlank()) "desde la creación" else formatFechaEs(fecha)}")
+    Text("Repetición: ${form.describe()}")
+    Text(
+        text = REMEDIO_LOCKED_HINT,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /** Optional start date (SPEC 2.1): empty means "desde ahora". */

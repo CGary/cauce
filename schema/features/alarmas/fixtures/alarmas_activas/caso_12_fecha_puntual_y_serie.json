@@ -84,6 +84,7 @@
       "titulo": "Checkout",
       "tipo": "reunion",
       "hora": "15:00",
+      "fecha": "2026-11-13",
       "repeticion": {
         "freq": "WEEKLY",
         "byday": [
@@ -97,6 +98,7 @@
       "titulo": "Revisar facturación con Lucas",
       "tipo": "reunion",
       "hora": "16:00",
+      "fecha": "2026-11-14",
       "repeticion": null,
       "proximo_disparo": "2026-11-14T20:00:00Z"
     }

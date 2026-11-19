@@ -386,7 +386,7 @@ describe('ActivasView (P1)', () => {
     )
   })
 
-  it('editar empuja alarma_modificada v3 con el estado completo, no un diff', async () => {
+  it('editar un remedio empuja alarma_modificada v3 con el estado completo y el calendario sin cambios', async () => {
     const pushed = capturePush()
     server.use(
       http.get(URL_P1, () =>
@@ -428,11 +428,70 @@ describe('ActivasView (P1)', () => {
       titulo: 'Primer lunes de Ana',
       tipo: 'remedio',
       hora: '09:00',
-      // P1 no trae `fecha`: se rellena con la fecha local del próximo disparo.
-      fecha: localDate('2026-11-02T13:00:00Z', browserTimeZone()),
+      // La fila de P1 no trae `fecha` (el estado no la tiene): el evento tampoco (SPEC 2.2).
       repeticion: { freq: 'MONTHLY', interval: 1, byday: ['1MO'] },
       destinatario: 'Ana',
       remedio: 'Ibuprofeno',
+    })
+  })
+
+  it('corregir un remedio bloquea el calendario y guarda aunque su fecha de inicio ya pasó', async () => {
+    const pushed = capturePush()
+    server.use(
+      http.get(URL_P1, () =>
+        HttpResponse.json([
+          {
+            alarma_id: 'c1',
+            titulo: 'Kalmx Bruno',
+            tipo: 'remedio',
+            hora: '08:00',
+            fecha: '2026-01-11',
+            repeticion: { freq: 'HOURLY', interval: 8, count: 1000 },
+            proximo_disparo: '2026-11-13T12:00:00Z',
+            restantes: 9,
+          },
+        ]),
+      ),
+      http.get(URL_P2, () =>
+        HttpResponse.json([
+          {
+            alarma_id: 'c1',
+            destinatario: 'Brno',
+            remedio: 'Kalmx',
+            dosis_esperadas: 991,
+            dosis_dadas: 980,
+            ignoradas: 11,
+            ultima_dosis: null,
+          },
+        ]),
+      ),
+    )
+    renderApp('/alarmas/activas')
+    await userEvent.click(await screen.findByRole('button', { name: 'Editar Kalmx Bruno' }))
+    expect(screen.getByRole('note')).toHaveTextContent(/eliminá esta alarma y creá otra/)
+    for (const label of ['Tipo', 'Fecha de inicio', 'Hora', 'Repetición', 'Duración', 'Cantidad']) {
+      expect(screen.getByLabelText(label)).toBeDisabled()
+    }
+    expect(screen.getByLabelText('Fecha de inicio')).toHaveValue('2026-01-11')
+    expect(screen.getByLabelText('Cantidad')).toHaveValue(1000)
+    expect(screen.getByLabelText('Título')).toBeEnabled()
+    const destinatario = screen.getByLabelText('Destinatario')
+    await userEvent.clear(destinatario)
+    await userEvent.type(destinatario, 'Bruno')
+    const remedio = screen.getByLabelText('Remedio')
+    await userEvent.clear(remedio)
+    await userEvent.type(remedio, 'Kalmix')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(pushed()?.events).toHaveLength(1))
+    expect(pushed()?.events[0]?.payload).toEqual({
+      alarma_id: 'c1',
+      titulo: 'Kalmx Bruno',
+      tipo: 'remedio',
+      hora: '08:00',
+      fecha: '2026-01-11',
+      repeticion: { freq: 'HOURLY', interval: 8, count: 1000 },
+      destinatario: 'Bruno',
+      remedio: 'Kalmix',
     })
   })
 

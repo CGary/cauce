@@ -28,6 +28,9 @@ internal data class AlarmaActiva(
     val titulo: String,
     val tipo: String,
     val hora: String,
+    /** The vigente state's `fecha` (YYYY-MM-DD), omitted when it has none (SPEC §4 P1, rule 2.2). */
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val fecha: String? = null,
     val repeticion: JsonElement,
     @SerialName("proximo_disparo") val proximoDisparo: String,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
@@ -84,6 +87,7 @@ internal object AlarmasActivas : Projection<List<AlarmaActiva>> {
                     titulo = alarm.titulo,
                     tipo = alarm.tipo,
                     hora = alarm.horaRaw,
+                    fecha = alarm.fecha?.toString(),
                     repeticion = alarm.repeticion,
                     proximoDisparo = formatUtc(next),
                     restantes = restantes,

@@ -31,6 +31,8 @@ export interface AlarmaActiva {
   titulo: string
   tipo: string
   hora: string
+  /** `fecha` del estado vigente (AAAA-MM-DD); ausente si no la tiene ni en las `gcal:`. SPEC §4 P1. */
+  fecha?: string
   repeticion: ProyeccionRepeticion | null
   proximo_disparo: string
   restantes?: number

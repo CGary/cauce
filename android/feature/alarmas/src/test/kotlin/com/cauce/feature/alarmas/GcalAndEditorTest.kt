@@ -51,8 +51,14 @@ class GcalAndEditorTest {
         }
     }
 
-    private fun alarm(rep: JsonObject?, hora: String = "08:00", fecha: String? = null) = Alarm(
-        id = "a1", createdAt = ts, titulo = "X", tipo = "remedio",
+    // Re-anchoring tests use a non-remedio alarm: a remedio is never re-anchored (SPEC 2.2).
+    private fun alarm(
+        rep: JsonObject?,
+        hora: String = "08:00",
+        fecha: String? = null,
+        tipo: String = "otro",
+    ) = Alarm(
+        id = "a1", createdAt = ts, titulo = "X", tipo = tipo,
         hora = java.time.LocalTime.parse(hora), horaRaw = hora,
         repeticion = rep ?: JsonNull, rule = parseRecurrence(rep ?: JsonNull),
         destinatario = "Juan", remedio = "Amox", fecha = fecha?.let(java.time.LocalDate::parse),
@@ -60,7 +66,8 @@ class GcalAndEditorTest {
     )
 
     private fun row(next: String, restantes: Int? = null) = AlarmaActiva(
-        "a1", "X", "remedio", "08:00", JsonNull, next, restantes,
+        alarmaId = "a1", titulo = "X", tipo = "otro", hora = "08:00",
+        repeticion = JsonNull, proximoDisparo = next, restantes = restantes,
     )
 
     @Test
@@ -94,6 +101,86 @@ class GcalAndEditorTest {
     }
 
     @Test
+    fun `remedio prefill keeps the stored schedule even with a P1 row`() {
+        val rep = RepeticionForm(freq = "HOURLY", interval = 8, count = 15).toJson() as JsonObject
+        val remedio = alarm(rep, fecha = "2026-11-01", tipo = "remedio")
+        val p = editorPrefill(remedio, row("2026-11-05T20:00:00Z", 9), zone)
+        assertEquals("2026-11-01", p.fecha)
+        assertEquals("08:00", p.hora)
+        assertEquals(15, p.form.count)
+        val sinFecha = editorPrefill(alarm(rep, tipo = "remedio"), row("2026-11-05T20:00:00Z", 9), zone)
+        assertEquals("", sinFecha.fecha)
+        assertEquals(15, sinFecha.form.count)
+    }
+
+    @Test
+    fun `only an existing remedio locks the schedule`() {
+        assertTrue(isScheduleLocked(alarm(null, tipo = "remedio")))
+        assertFalse(isScheduleLocked(alarm(null, tipo = "otro")))
+        assertFalse(isScheduleLocked(alarm(null, tipo = "reunion")))
+        assertFalse(isScheduleLocked(null))
+    }
+
+    private val hourly15 = buildJsonObject {
+        put("freq", "HOURLY")
+        put("interval", 8)
+        put("count", 15)
+    }
+
+    private fun creada(alarmaId: String, hora: String, fecha: String?, at: String) = alarmaCreada(
+        "t", Instant.parse(at), alarmaId, "Kalmx Bruno", "remedio", hora, hourly15,
+        "Brno", "Kalmx", fecha = fecha, id = "c-$alarmaId",
+    )
+
+    private fun params(now: String) = buildJsonObject {
+        put("now", now)
+        put("tz", "America/La_Paz")
+    }
+
+    @Test
+    fun `remedio correction resends the stored schedule and keeps P1 and P2`() {
+        val before = listOf(
+            creada("c1", "08:00", "2026-11-11", "2026-11-10T12:00:00Z"),
+            creada("s1", "06:00", null, "2026-11-11T09:00:00Z"),
+        )
+        val p = params("2026-11-13T11:00:00Z")
+        val activasBefore = AlarmasActivas.compute(before, p)
+        val adherenciaBefore = AdherenciaTratamiento.compute(before, p)
+
+        val edits = foldAlarms(before).map { a ->
+            remedioCorrection("t", Instant.parse("2026-11-12T15:00:00Z"), a, " Kalmix Bruno ", "Bruno", "Kalmix")
+        }
+        val c1 = edits.single { it.payload["alarma_id"] == JsonPrimitive("c1") }
+        val s1 = edits.single { it.payload["alarma_id"] == JsonPrimitive("s1") }
+        assertEquals("alarma_modificada", c1.type)
+        assertEquals(JsonPrimitive("2026-11-11"), c1.payload["fecha"])
+        assertFalse(s1.payload.containsKey("fecha"))
+        assertEquals(hourly15, c1.payload["repeticion"])
+        assertEquals(JsonPrimitive("08:00"), c1.payload["hora"])
+        assertEquals(JsonPrimitive("Kalmix Bruno"), c1.payload["titulo"])
+
+        val after = before + edits
+        val activasAfter = AlarmasActivas.compute(after, p)
+        assertEquals(
+            activasBefore.map { Triple(it.alarmaId, it.proximoDisparo, it.restantes) },
+            activasAfter.map { Triple(it.alarmaId, it.proximoDisparo, it.restantes) },
+        )
+        assertEquals(listOf("2026-11-11", null), activasAfter.map { it.fecha })
+        assertEquals(listOf(9, 8), activasAfter.map { it.restantes })
+        val adherenciaAfter = AdherenciaTratamiento.compute(after, p)
+        assertEquals(adherenciaBefore.map { it.dosisEsperadas }, adherenciaAfter.map { it.dosisEsperadas })
+        assertEquals(listOf(6, 7), adherenciaAfter.map { it.dosisEsperadas })
+        assertEquals(listOf("Bruno", "Bruno"), adherenciaAfter.map { it.destinatario })
+    }
+
+    @Test
+    fun `remedio correction refuses a non-remedio alarm`() {
+        assertFailsWith<IllegalArgumentException> {
+            remedioCorrection("t", ts, alarm(null, tipo = "otro"), "X", "Juan", "Amox")
+        }
+    }
+
+    @Test
     fun `gcal id detection`() {
         assertTrue(isGcalId("gcal:r1"))
         assertFalse(isGcalId("0198-abc"))
@@ -123,7 +210,7 @@ class GcalAndEditorTest {
 
     @Test
     fun `own one-shot remedio hecho still emits dosis and una_vez_atendida`() {
-        val hecho = hechoEvents("d", ts, "a1", aviso, alarm(null))
+        val hecho = hechoEvents("d", ts, "a1", aviso, alarm(null, tipo = "remedio"))
         assertEquals(listOf("alarma_atendida", "dosis_dada", "alarma_desactivada"), hecho.map { it.type })
     }
 }

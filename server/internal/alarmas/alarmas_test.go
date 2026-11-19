@@ -19,8 +19,8 @@ func envelope(id, typ string, v int, ts, payload string) event.Envelope {
 }
 
 // runActivas runs P1 with fixed params and returns the marshaled result, so
-// the tests also pin the exact keys of every entry (no `restantes`, no
-// `fecha`).
+// the tests also pin the exact keys of every entry (no `restantes`, and no
+// `fecha`: the gcal: entries never carry one).
 func runActivas(t *testing.T, events []event.Envelope) string {
 	t.Helper()
 	params := projection.Params{

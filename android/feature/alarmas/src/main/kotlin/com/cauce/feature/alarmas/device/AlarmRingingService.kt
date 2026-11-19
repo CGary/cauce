@@ -13,10 +13,12 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.cauce.core.events.cauceServices
 import com.cauce.feature.alarmas.RingingKey
 import com.cauce.feature.alarmas.RingingSet
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,6 +27,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Plays the alarm like the system clock does (SPEC 2.3, §5): a foreground service that loops the
@@ -32,14 +35,27 @@ import kotlinx.coroutines.launch
  * it. Its foreground notification is the full-screen one (Hecho / Posponer). It rings while any
  * firing is unattended, stops with the last one, and cuts each firing after 2 minutes through
  * [AlarmActions.timeout].
+ *
+ * No failure on the start path may kill the process (a dead process rings nothing): if
+ * `startForeground` fails, the audible backup notification is posted and the service stops; if
+ * only the player fails, the service stays in the foreground and swaps its notification for the
+ * audible backup, and keeps vibrating. Every caught failure is logged under [AlarmasRuntime.TAG].
  */
 class AlarmRingingService : Service() {
     private val set = RingingSet()
-    private val notifications = HashMap<RingingKey, Pair<Int, Notification>>()
+    private val notifications = HashMap<RingingKey, Shown>()
     private val timers = HashMap<RingingKey, Job>()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e ->
+            Log.e(AlarmasRuntime.TAG, "uncaught failure in the ringing service", e)
+        },
+    )
     private var foregroundKey: RingingKey? = null
+    private var ringing = false
     private var player: MediaPlayer? = null
+
+    /** The player could not start: the foreground notification is the audible backup instead. */
+    private var audibleFallback = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var observing = false
 
@@ -61,35 +77,64 @@ class AlarmRingingService : Service() {
     }
 
     private fun start(key: RingingKey, intent: Intent) {
-        @Suppress("DEPRECATION")
-        val notification = intent.getParcelableExtra<Notification>(EXTRA_NOTIFICATION)
+        val notification = readNotification(intent, EXTRA_NOTIFICATION)
+        val fallback = readNotification(intent, EXTRA_FALLBACK_NOTIFICATION) ?: notification
         val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, key.alarmaId.hashCode())
-        if (notification == null) {
+        if (notification == null || fallback == null) {
+            Log.e(AlarmasRuntime.TAG, "ringing ${key.alarmaId}: no notification in the start intent")
             if (!set.isRinging) stopSelf()
             return
         }
-        notifications[key] = notificationId to notification
-        showForeground(key)
+        notifications[key] = Shown(notificationId, notification, fallback)
+        if (!showForeground(key)) {
+            // Not in the foreground, so the service cannot play: the backup channel rings instead.
+            notifications.remove(key)
+            AlarmNotifications.notifyId(this, notificationId, fallback)
+            if (!set.isRinging) stopSelf()
+            return
+        }
         set.start(key)
         startRinging()
         timers.remove(key)?.cancel()
         timers[key] = scope.launch {
             delay(RING_MILLIS)
-            AlarmActions.timeout(applicationContext, key.alarmaId, key.programadaPara)
+            try {
+                AlarmActions.timeout(applicationContext, key.alarmaId, key.programadaPara)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(AlarmasRuntime.TAG, "timeout of ${key.alarmaId} failed", e)
+            }
             close(key)
         }
         observeLog()
     }
 
-    private fun showForeground(key: RingingKey) {
-        val (id, notification) = notifications.getValue(key)
+    private fun readNotification(intent: Intent, name: String): Notification? = try {
+        @Suppress("DEPRECATION")
+        intent.getParcelableExtra<Notification>(name)
+    } catch (e: RuntimeException) {
+        Log.e(AlarmasRuntime.TAG, "reading the notification extra '$name' failed", e)
+        null
+    }
+
+    /** Returns false (and logs why) when the system refuses the foreground start. */
+    private fun showForeground(key: RingingKey): Boolean {
+        val shown = notifications.getValue(key)
+        val notification = if (audibleFallback) shown.fallback else shown.notification
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED
         } else {
             0
         }
-        ServiceCompat.startForeground(this, id, notification, type)
-        foregroundKey = key
+        return try {
+            ServiceCompat.startForeground(this, shown.id, notification, type)
+            foregroundKey = key
+            true
+        } catch (e: Exception) {
+            Log.e(AlarmasRuntime.TAG, "startForeground for ${key.alarmaId} failed", e)
+            false
+        }
     }
 
     /** Reuses the log as source of truth, like [AlarmAlertActivity]: a terminal atendida stops it. */
@@ -115,43 +160,80 @@ class AlarmRingingService : Service() {
         }
         if (wasForeground) {
             set.keys.firstOrNull { it in notifications }?.let { showForeground(it) }
-            closed?.let { AlarmNotifications.cancelId(this, it.first) }
+            closed?.let { AlarmNotifications.cancelId(this, it.id) }
         }
     }
 
+    /** Wake lock, looping alarm tone and vibration, once per ringing session. */
     private fun startRinging() {
+        if (ringing) return
+        ringing = true
         if (wakeLock == null) {
-            val pm = getSystemService(PowerManager::class.java)
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cauce:alarmas:ringing")
-                .apply { acquire(WAKE_LOCK_MILLIS) }
+            try {
+                val pm = getSystemService(PowerManager::class.java)
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cauce:alarmas:ringing")
+                    .apply { acquire(WAKE_LOCK_MILLIS) }
+            } catch (e: RuntimeException) {
+                Log.e(AlarmasRuntime.TAG, "acquiring the ringing wake lock failed", e)
+            }
         }
-        if (player == null) {
-            val uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            player = runCatching {
-                MediaPlayer().apply {
-                    setAudioAttributes(ALARM_ATTRIBUTES)
-                    setDataSource(this@AlarmRingingService, uri)
-                    isLooping = true
-                    prepare()
-                    start()
-                }
-            }.getOrNull()
+        player = createPlayer()
+        if (player == null) useAudibleFallback()
+        try {
             val vibrator = getSystemService(Vibrator::class.java)
             @Suppress("DEPRECATION")
             vibrator?.vibrate(VibrationEffect.createWaveform(VIBRATION_PATTERN, 0), ALARM_ATTRIBUTES)
+        } catch (e: RuntimeException) {
+            Log.e(AlarmasRuntime.TAG, "starting the vibration failed", e)
+        }
+    }
+
+    private fun createPlayer(): MediaPlayer? {
+        var created: MediaPlayer? = null
+        return try {
+            val uri = RingtoneManager.getActualDefaultRingtoneUri(this, RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            MediaPlayer().also { created = it }.apply {
+                setAudioAttributes(ALARM_ATTRIBUTES)
+                setDataSource(this@AlarmRingingService, uri)
+                isLooping = true
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            Log.e(AlarmasRuntime.TAG, "alarm tone could not play; using the audible backup", e)
+            runCatching { created?.release() }
+            null
+        }
+    }
+
+    /**
+     * The player failed: the foreground notification becomes the audible backup (alarm sound on
+     * its own channel, insistent). Re-posting the same id updates the foreground notification.
+     */
+    private fun useAudibleFallback() {
+        if (audibleFallback) return
+        audibleFallback = true
+        val key = foregroundKey ?: return
+        if (!showForeground(key)) {
+            notifications[key]?.let { AlarmNotifications.notifyId(this, it.id, it.fallback) }
         }
     }
 
     private fun stopRinging() {
+        ringing = false
+        audibleFallback = false
         runCatching { player?.stop() }
-        player?.release()
+        runCatching { player?.release() }
         player = null
-        getSystemService(Vibrator::class.java)?.cancel()
+        runCatching { getSystemService(Vibrator::class.java)?.cancel() }
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
     }
+
+    /** A ringing firing's foreground notification and its audible backup (same id). */
+    private class Shown(val id: Int, val notification: Notification, val fallback: Notification)
 
     override fun onDestroy() {
         stopRinging()
@@ -164,6 +246,7 @@ class AlarmRingingService : Service() {
         private const val ACTION_CLOSE = "com.cauce.feature.alarmas.action.RING_CLOSE"
         private const val EXTRA_NOTIFICATION = "notification"
         private const val EXTRA_NOTIFICATION_ID = "notification_id"
+        private const val EXTRA_FALLBACK_NOTIFICATION = "fallback_notification"
         private const val RING_MILLIS = 2 * 60 * 1000L
         private const val WAKE_LOCK_MILLIS = 3 * 60 * 1000L
         private val VIBRATION_PATTERN = longArrayOf(0, 500, 500)
@@ -179,6 +262,7 @@ class AlarmRingingService : Service() {
             programadaPara: String,
             notificationId: Int,
             notification: Notification,
+            fallback: Notification,
         ): Boolean = try {
             val intent = Intent(context, AlarmRingingService::class.java)
                 .setAction(ACTION_START)
@@ -186,9 +270,11 @@ class AlarmRingingService : Service() {
                 .putExtra(AlarmReceiver.EXTRA_PROGRAMADA_PARA, programadaPara)
                 .putExtra(EXTRA_NOTIFICATION_ID, notificationId)
                 .putExtra(EXTRA_NOTIFICATION, notification)
+                .putExtra(EXTRA_FALLBACK_NOTIFICATION, fallback)
             context.startForegroundService(intent)
             true
         } catch (e: RuntimeException) {
+            Log.e(AlarmasRuntime.TAG, "startForegroundService for $alarmaId refused", e)
             false
         }
 

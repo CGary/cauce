@@ -39,6 +39,13 @@ export type MonthlyMode = 'bymonthday' | 'byday'
 /** `days` solo existe en HOURLY: se guarda como `count` ("cada 8 h por 5 días" = 15). */
 export type LimitMode = 'none' | 'count' | 'until' | 'days'
 
+/**
+ * Topes de la web para los números de una repetición (SPEC §8, agente). Sin tope, un
+ * valor enorme llega al servidor y rompe las proyecciones (Go lo decodifica en `int`).
+ */
+export const MAX_COUNT = 1000
+export const MAX_INTERVAL = 365
+
 /** Intervalos típicos de un remedio, en horas. */
 export const HOURLY_PRESETS = ['4', '6', '8', '12'] as const
 
@@ -155,7 +162,9 @@ export function activaToForm(
   // con `restantes` como count, anclar más temprano perdería una dosis y anclar
   // más tarde se saltaría otra. Así `fecha` + `hora` es `proximo_disparo`.
   if (rep.freq === 'HOURLY') form.hora = localTime(row.proximo_disparo, tz)
-  form.interval = rep.interval !== undefined ? String(rep.interval) : ''
+  // Un HOURLY sin `interval` es cada 1 h: se muestra explícito, porque vacío no es válido.
+  form.interval =
+    rep.interval !== undefined ? String(rep.interval) : rep.freq === 'HOURLY' ? '1' : ''
   // Al reanclar en el próximo disparo, la serie conserva solo los disparos que
   // faltan: `restantes` es el `count` nuevo (si no hay `count`, no hay límite).
   const count = rep.count !== undefined ? (row.restantes ?? rep.count) : undefined
@@ -216,12 +225,17 @@ function isDate(value: string): boolean {
   )
 }
 
-function parsePositiveInt(value: string): number | null {
+function parsePositiveInt(value: string, max: number = Number.MAX_SAFE_INTEGER): number | null {
   if (!/^[1-9]\d*$/.test(value.trim())) return null
-  return Number(value)
+  const n = Number(value.trim())
+  return Number.isSafeInteger(n) && n <= max ? n : null
 }
 
-export function validateForm(form: AlarmaFormState): string | null {
+/**
+ * Valida el formulario. `now` es el reloj del navegador (el mismo que pone el `ts`):
+ * una alarma que ya no puede sonar no se guarda.
+ */
+export function validateForm(form: AlarmaFormState, now: Date = new Date()): string | null {
   const titulo = form.titulo.trim()
   if (titulo.length < 1 || titulo.length > 120)
     return 'El título tiene que tener entre 1 y 120 caracteres'
@@ -238,18 +252,35 @@ export function validateForm(form: AlarmaFormState): string | null {
     if (remedio.length < 1 || remedio.length > 120)
       return 'El remedio tiene que tener entre 1 y 120 caracteres'
   }
-  if (form.freq === 'una_vez') return null
-  if (form.interval.trim() !== '' && parsePositiveInt(form.interval) === null) {
-    return 'El intervalo tiene que ser un entero ≥ 1'
+  const fecha = form.fecha.trim()
+  const today = localDate(now.toISOString())
+  if (form.freq === 'una_vez') {
+    const hora = normalizeHora(form.hora) ?? form.hora
+    if (fecha !== '' && `${fecha}T${hora}` < `${today}T${localTime(now.toISOString())}`) {
+      return 'La fecha y la hora ya pasaron: la alarma no sonaría nunca'
+    }
+    return null
   }
-  if (form.limit === 'count' && parsePositiveInt(form.count) === null) {
-    return 'La cantidad tiene que ser un entero ≥ 1'
+  if (form.freq === 'HOURLY' && form.interval.trim() === '') {
+    return 'El intervalo es obligatorio: elegí cada cuántas horas'
   }
-  if (form.limit === 'days' && form.freq === 'HOURLY' && parsePositiveInt(form.dias) === null) {
-    return 'Los días tienen que ser un entero ≥ 1'
+  if (form.interval.trim() !== '' && parsePositiveInt(form.interval, MAX_INTERVAL) === null) {
+    return `El intervalo tiene que ser un entero entre 1 y ${MAX_INTERVAL}`
   }
-  if (form.limit === 'until' && !isDate(form.until.trim()))
-    return 'Hasta tiene que ser una fecha YYYY-MM-DD'
+  if (form.limit === 'count' && parsePositiveInt(form.count, MAX_COUNT) === null) {
+    return `La cantidad tiene que ser un entero entre 1 y ${MAX_COUNT}`
+  }
+  if (form.limit === 'days' && form.freq === 'HOURLY') {
+    const doses = dosesForDays(form.dias, form.interval)
+    if (doses === null) return 'Los días tienen que ser un entero ≥ 1'
+    if (doses > MAX_COUNT) return `Los días dan ${doses} tomas: el máximo es ${MAX_COUNT}`
+  }
+  if (form.limit === 'until') {
+    const until = form.until.trim()
+    if (!isDate(until)) return 'Hasta tiene que ser una fecha YYYY-MM-DD'
+    if (fecha !== '' && until < fecha) return 'Hasta no puede ser anterior a la fecha de inicio'
+    if (until < today) return 'Hasta ya pasó: la alarma no sonaría nunca'
+  }
   if (form.freq === 'MONTHLY' && form.monthlyMode === 'bymonthday') {
     if (form.bymonthday.trim() === '-1') return null
     const day = Number(form.bymonthday)
@@ -303,8 +334,12 @@ function buildRepeticion(form: AlarmaFormState): Repeticion | null {
   return rep
 }
 
-export function formToPayload(form: AlarmaFormState, alarmaId: string): AlarmaPayload {
-  const error = validateForm(form)
+export function formToPayload(
+  form: AlarmaFormState,
+  alarmaId: string,
+  now: Date = new Date(),
+): AlarmaPayload {
+  const error = validateForm(form, now)
   if (error) throw new Error(error)
   const payload: AlarmaPayload = {
     alarma_id: alarmaId,
@@ -340,17 +375,26 @@ export function desactivadaPayload(alarmaId: string): Record<string, unknown> {
   return { alarma_id: alarmaId, motivo: 'usuario' }
 }
 
-export function repeticionResumen(rep: AlarmaActiva['repeticion']): string {
+/**
+ * Resumen de la repetición para la tabla. `restantes` es el de P1 (disparos que faltan,
+ * solo si hay `count`): si viene, se muestra «quedan N» en lugar del `count` original.
+ */
+export function repeticionResumen(rep: AlarmaActiva['repeticion'], restantes?: number): string {
   if (!rep) return 'Una vez'
+  const hourly = rep.freq === 'HOURLY'
+  const cadaHoras =
+    rep.interval !== undefined && rep.interval !== 1 ? `Cada ${rep.interval} horas` : 'Cada hora'
   const freq = isFreq(rep.freq)
-    ? { DAILY: 'Diaria', WEEKLY: 'Semanal', MONTHLY: 'Mensual', HOURLY: 'Cada hora' }[rep.freq]
+    ? { DAILY: 'Diaria', WEEKLY: 'Semanal', MONTHLY: 'Mensual', HOURLY: cadaHoras }[rep.freq]
     : rep.freq
   const bits = [freq]
-  if (rep.interval !== undefined && rep.interval !== 1) bits.push(`cada ${rep.interval}`)
+  if (!hourly && rep.interval !== undefined && rep.interval !== 1) bits.push(`cada ${rep.interval}`)
   if (rep.bymonthday === -1) bits.push('último día')
   else if (rep.bymonthday !== undefined) bits.push(`día ${rep.bymonthday}`)
   if (rep.byday && rep.byday.length > 0) bits.push(formatByday(rep.byday))
-  if (rep.count !== undefined) bits.push(`${rep.count} veces`)
+  if (rep.count !== undefined && restantes !== undefined) {
+    bits.push(restantes === 1 ? 'queda 1' : `quedan ${restantes}`)
+  } else if (rep.count !== undefined) bits.push(`${rep.count} veces`)
   if (rep.until) bits.push(`hasta ${rep.until}`)
   return bits.join(' · ')
 }
@@ -367,12 +411,14 @@ export function parseRepeticion(value: unknown): Repeticion | null | string {
   if (!isFreqString(freq)) return 'freq fuera del subconjunto'
   const rep: Repeticion = { freq }
   if (value.interval !== undefined) {
-    if (!isPositiveInt(value.interval)) return 'interval tiene que ser un entero ≥ 1'
+    if (!isPositiveInt(value.interval) || value.interval > MAX_INTERVAL)
+      return `interval tiene que ser un entero entre 1 y ${MAX_INTERVAL}`
     rep.interval = value.interval
   }
   if (value.count !== undefined && value.until !== undefined) return 'count y until son excluyentes'
   if (value.count !== undefined) {
-    if (!isPositiveInt(value.count)) return 'count tiene que ser un entero ≥ 1'
+    if (!isPositiveInt(value.count) || value.count > MAX_COUNT)
+      return `count tiene que ser un entero entre 1 y ${MAX_COUNT}`
     rep.count = value.count
   }
   if (value.until !== undefined) {
@@ -418,7 +464,7 @@ function isFreqString(value: unknown): value is Freq {
 }
 
 function isPositiveInt(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1
 }
 
 function isMonthday(value: unknown): value is number {

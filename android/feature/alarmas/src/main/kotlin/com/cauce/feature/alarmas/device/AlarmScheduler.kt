@@ -22,7 +22,10 @@ internal class AlarmScheduler(context: Context) {
     private val prefs: SharedPreferences =
         appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    /** Cancels the previously scheduled firings and programs one exact alarm per plan. */
+    /**
+     * Cancels the previously scheduled firings and programs one exact alarm per plan. Only
+     * [AlarmasRuntime.rescheduleNow] calls it, under its lock, so two calls never interleave.
+     */
     fun replaceAll(plans: List<FiringPlan>) {
         cancelScheduledFirings()
         plans.forEach { plan -> scheduleAt(plan.triggerAt, fireIntent(plan.alarmaId, plan.triggerAt), clock = true) }

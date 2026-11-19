@@ -36,9 +36,11 @@ import {
   rowsToBulk,
   type AlarmaFormState,
 } from '../model'
-import type { AlarmaActiva, AlarmaPayload } from '../types'
+import type { AlarmaActiva, AlarmaPayload, BulkAlarma } from '../types'
 import { AlarmaForm } from './AlarmaForm'
 import { TipoChip } from './TipoChip'
+
+type ImportResult = { ok: string | null; errors: string[] }
 
 type Editing = { mode: 'crear' | 'editar'; alarmaId: string; initial: AlarmaFormState }
 
@@ -115,7 +117,8 @@ export default function ActivasView() {
   const [editing, setEditing] = useState<Editing | null>(null)
   const [pendingDelete, setPendingDelete] = useState<AlarmaActiva | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [importErrors, setImportErrors] = useState<string[]>([])
+  // Resultado de la última importación (éxito y errores juntos), junto al control de importar.
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [tipoFiltro, setTipoFiltro] = useState('')
   const [origenFiltro, setOrigenFiltro] = useState('')
   const [googleAbierto, setGoogleAbierto] = useState(false)
@@ -135,10 +138,34 @@ export default function ActivasView() {
     try {
       await push.mutateAsync(events)
       setNotice(ok)
+      setImportResult(null)
       setEditing(null)
       setPendingDelete(null)
     } catch {
       setNotice(null)
+    }
+  }
+
+  /** Empuja lo importado y deja éxito y errores en un solo resultado, que reemplaza al anterior. */
+  async function sendImport(entries: BulkAlarma[], errors: string[]) {
+    setNotice(null)
+    if (entries.length === 0) {
+      setImportResult({ ok: null, errors })
+      return
+    }
+    try {
+      await push.mutateAsync(
+        entries.map((entry) =>
+          buildEvent('alarma_creada', payloadRecord(bulkToPayload(entry, uuidv7())), {
+            v: V_ALARMA_CREADA,
+          }),
+        ),
+      )
+      const n = entries.length
+      setImportResult({ ok: n === 1 ? 'Se cargó 1 alarma.' : `Se cargaron ${n} alarmas.`, errors })
+    } catch {
+      // El motivo del rechazo se ve en `pushError`, en el mismo lugar.
+      setImportResult({ ok: null, errors })
     }
   }
 
@@ -155,49 +182,43 @@ export default function ActivasView() {
   }
 
   async function onImportJson(file: File) {
-    setImportErrors([])
+    setImportResult(null)
     let parsed: ReturnType<typeof parseBulk>
     try {
       parsed = parseBulk(await readFile(file))
     } catch (error) {
-      setImportErrors([error instanceof Error ? error.message : 'No se pudo leer el archivo'])
+      setImportResult({
+        ok: null,
+        errors: [error instanceof Error ? error.message : 'No se pudo leer el archivo'],
+      })
       return
     }
     if (!parsed.ok) {
-      setImportErrors([parsed.error])
+      setImportResult({ ok: null, errors: [parsed.error] })
       return
     }
     if (parsed.alarmas.length === 0) {
-      setImportErrors(['El archivo no tiene alarmas'])
+      setImportResult({ ok: null, errors: ['El archivo no tiene alarmas'] })
       return
     }
-    await send(
-      parsed.alarmas.map((entry) =>
-        buildEvent('alarma_creada', payloadRecord(bulkToPayload(entry, uuidv7())), {
-          v: V_ALARMA_CREADA,
-        }),
-      ),
-      `Se cargaron ${parsed.alarmas.length} alarmas.`,
-    )
+    await sendImport(parsed.alarmas, [])
   }
 
   async function onImportIcs(file: File) {
+    setImportResult(null)
     let parsed: IcsImportResult
     try {
       parsed = importIcs(await readFile(file), { tz })
     } catch (error) {
-      setImportErrors([error instanceof Error ? error.message : 'No se pudo leer el archivo .ics'])
+      setImportResult({
+        ok: null,
+        errors: [error instanceof Error ? error.message : 'No se pudo leer el archivo .ics'],
+      })
       return
     }
-    setImportErrors(parsed.errors.map((error) => `Evento ${error.index}: ${error.message}`))
-    if (parsed.alarmas.length === 0) return
-    await send(
-      parsed.alarmas.map((entry) =>
-        buildEvent('alarma_creada', payloadRecord(bulkToPayload(entry, uuidv7())), {
-          v: V_ALARMA_CREADA,
-        }),
-      ),
-      `Se cargaron ${parsed.alarmas.length} alarmas.`,
+    await sendImport(
+      parsed.alarmas,
+      parsed.errors.map((error) => `Evento ${error.index}: ${error.message}`),
     )
   }
 
@@ -239,7 +260,7 @@ export default function ActivasView() {
       header: 'Hora',
       render: (row) => <span className="whitespace-nowrap">{formatHora(row.hora)}</span>,
     },
-    { header: 'Repetición', render: (row) => repeticionResumen(row.repeticion) },
+    { header: 'Repetición', render: (row) => repeticionResumen(row.repeticion, row.restantes) },
     {
       header: 'Próximo disparo',
       render: (row) => (
@@ -252,9 +273,10 @@ export default function ActivasView() {
         isGoogleCalendar(row.alarma_id) ? (
           <span className="text-caption text-muted">Google Calendar · se edita en Reuniones</span>
         ) : (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               aria-label={`Editar ${row.titulo}`}
+              className="whitespace-nowrap"
               disabled={!adherenciaReady}
               onClick={() => {
                 const extra = extras.find((item) => item.alarma_id === row.alarma_id)
@@ -271,7 +293,7 @@ export default function ActivasView() {
             <Button
               aria-label={`Eliminar ${row.titulo}`}
               variant="ghost"
-              className="border border-danger text-danger-ink! hover:bg-danger-soft!"
+              className="border border-danger whitespace-nowrap text-danger-ink! hover:bg-danger-soft!"
               onClick={() => {
                 setEditing(null)
                 setPendingDelete(row)
@@ -370,6 +392,37 @@ export default function ActivasView() {
           </div>
         </details>
       </div>
+      {(importResult || (!editing && !pendingDelete && pushError)) && (
+        <section aria-label="Resultado de la importación" className="flex flex-col gap-2">
+          {importResult?.ok && (
+            <p
+              role="status"
+              className="rounded-control border border-success bg-success-soft px-4 py-3 font-medium text-success-ink"
+            >
+              <span aria-hidden="true">✓ </span>
+              {importResult.ok} El teléfono lo aplica en su próximo pull.
+            </p>
+          )}
+          {importResult && importResult.errors.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-control border border-danger bg-danger-soft px-4 py-3 text-danger-ink"
+            >
+              <p className="font-semibold">
+                {importResult.ok
+                  ? 'Algunos ítems no se importaron'
+                  : 'No se pudo importar el archivo'}
+              </p>
+              <ul className="list-disc pl-5">
+                {importResult.errors.map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {!editing && !pendingDelete && pushError}
+        </section>
+      )}
       <div role="status" aria-live="polite" className="flex flex-col gap-2 empty:hidden">
         {adherencia.isPending && (
           <p className="rounded-control bg-surface-2 px-4 py-3 text-caption text-muted">
@@ -543,20 +596,6 @@ export default function ActivasView() {
             {pushError}
           </div>
         </Dialog>
-      )}
-      {!editing && !pendingDelete && pushError}
-      {importErrors.length > 0 && (
-        <div
-          role="alert"
-          className="rounded-control border border-danger bg-danger-soft px-4 py-3 text-danger-ink"
-        >
-          <p className="font-semibold">No se pudo importar todo el archivo</p>
-          <ul className="list-disc pl-5">
-            {importErrors.map((error) => (
-              <li key={error}>{error}</li>
-            ))}
-          </ul>
-        </div>
       )}
     </Page>
   )

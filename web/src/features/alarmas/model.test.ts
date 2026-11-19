@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  MAX_COUNT,
+  MAX_INTERVAL,
   activaToForm,
   desactivadaPayload,
   dosesForDays,
@@ -7,6 +9,8 @@ import {
   exportBulk,
   formToPayload,
   parseBulk,
+  parseRepeticion,
+  repeticionResumen,
   rowsToBulk,
   validateForm,
   type AlarmaFormState,
@@ -18,6 +22,119 @@ const TZ = 'America/La_Paz'
 function form(partial: Partial<AlarmaFormState> = {}): AlarmaFormState {
   return { ...emptyForm(), ...partial }
 }
+
+// validateForm rechaza fechas pasadas con el reloj del navegador: se fija para que las
+// fechas de los casos (nov 2026) sean futuras siempre.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-20T12:00:00Z'))
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe('validateForm: lo que no puede sonar no se guarda', () => {
+  const now = new Date('2026-11-19T15:00:00Z')
+
+  it('una puntual con fecha y hora pasadas es un error de fecha', () => {
+    expect(validateForm(form({ titulo: 'X', fecha: '2026-11-18', hora: '09:00' }), now)).toMatch(
+      /^La fecha y la hora ya pasaron/,
+    )
+    expect(() => formToPayload(form({ titulo: 'X', fecha: '2026-11-18' }), 'a1', now)).toThrow()
+    // Sin fecha es «desde ahora»: nunca está en el pasado.
+    expect(validateForm(form({ titulo: 'X', hora: '00:01' }), now)).toBeNull()
+    expect(validateForm(form({ titulo: 'X', fecha: '2026-11-25', hora: '09:00' }), now)).toBeNull()
+  })
+
+  it('«Hasta» anterior a la fecha de inicio o ya pasado es un error de Hasta', () => {
+    const base = { titulo: 'X', freq: 'DAILY' as const, limit: 'until' as const }
+    expect(validateForm(form({ ...base, fecha: '2026-12-10', until: '2026-12-01' }), now)).toBe(
+      'Hasta no puede ser anterior a la fecha de inicio',
+    )
+    expect(validateForm(form({ ...base, until: '2026-11-01' }), now)).toMatch(/^Hasta ya pasó/)
+    expect(validateForm(form({ ...base, fecha: '2026-12-01', until: '2026-12-01' }), now)).toBeNull()
+  })
+
+  it('«cada N horas» sin opción elegida es un error, no cada 1 h', () => {
+    expect(validateForm(form({ titulo: 'X', freq: 'HOURLY', interval: '' }))).toMatch(
+      /^El intervalo es obligatorio/,
+    )
+  })
+
+  it('un HOURLY sin interval en P1 se edita como cada 1 h explícito', () => {
+    const row: AlarmaActiva = {
+      alarma_id: 'h0',
+      titulo: 'Agua',
+      tipo: 'otro',
+      hora: '08:00',
+      repeticion: { freq: 'HOURLY' },
+      proximo_disparo: '2026-11-02T12:00:00Z',
+    }
+    const state = activaToForm(row, undefined, TZ)
+    expect(state.interval).toBe('1')
+    expect(formToPayload(state, 'h0').repeticion).toEqual({ freq: 'HOURLY', interval: 1 })
+  })
+})
+
+describe('topes numéricos', () => {
+  it('cantidad hasta MAX_COUNT, intervalo hasta MAX_INTERVAL', () => {
+    expect(MAX_COUNT).toBe(1000)
+    expect(MAX_INTERVAL).toBe(365)
+    const daily = { titulo: 'X', freq: 'DAILY' as const }
+    expect(validateForm(form({ ...daily, limit: 'count', count: '1000' }))).toBeNull()
+    expect(validateForm(form({ ...daily, limit: 'count', count: '1001' }))).toMatch(/^La cantidad/)
+    expect(
+      validateForm(form({ ...daily, limit: 'count', count: '99999999999999999999' })),
+    ).toMatch(/^La cantidad/)
+    expect(validateForm(form({ ...daily, interval: '365' }))).toBeNull()
+    expect(validateForm(form({ ...daily, interval: '366' }))).toMatch(/^El intervalo/)
+    expect(validateForm(form({ ...daily, interval: '99999999999999999999' }))).toMatch(
+      /^El intervalo/,
+    )
+  })
+
+  it('«por días» que da más de MAX_COUNT tomas es un error de días', () => {
+    expect(
+      validateForm(form({ titulo: 'X', freq: 'HOURLY', interval: '1', limit: 'days', dias: '42' })),
+    ).toMatch(/^Los días dan 1008 tomas/)
+  })
+
+  it('la carga en bloque (y el .ics, que pasa por aquí) rechaza valores fuera de tope', () => {
+    expect(parseRepeticion({ freq: 'DAILY', count: 1001 })).toMatch(/^count tiene que ser/)
+    expect(parseRepeticion({ freq: 'DAILY', count: 1e20 })).toMatch(/^count tiene que ser/)
+    expect(parseRepeticion({ freq: 'DAILY', interval: 366 })).toMatch(/^interval tiene que ser/)
+    expect(parseRepeticion({ freq: 'DAILY', count: 1000, interval: 365 })).toEqual({
+      freq: 'DAILY',
+      count: 1000,
+      interval: 365,
+    })
+    const file = JSON.stringify({
+      formato: 'cauce.alarmas',
+      version: 1,
+      alarmas: [{ titulo: 'A', tipo: 'otro', hora: '08:00', repeticion: { freq: 'DAILY', count: 99999999999999999999 } }],
+    })
+    expect(parseBulk(file)).toEqual({
+      ok: false,
+      error: 'Ítem 1: count tiene que ser un entero entre 1 y 1000',
+    })
+  })
+})
+
+describe('repeticionResumen', () => {
+  it('un HOURLY dice cada cuántas horas', () => {
+    expect(repeticionResumen({ freq: 'HOURLY', interval: 8 })).toBe('Cada 8 horas')
+    expect(repeticionResumen({ freq: 'HOURLY', interval: 1 })).toBe('Cada hora')
+    expect(repeticionResumen({ freq: 'HOURLY' })).toBe('Cada hora')
+  })
+
+  it('con `restantes` de P1 muestra lo que queda, no el count original', () => {
+    expect(repeticionResumen({ freq: 'HOURLY', interval: 8, count: 15 }, 7)).toBe(
+      'Cada 8 horas · quedan 7',
+    )
+    expect(repeticionResumen({ freq: 'DAILY', count: 15 }, 1)).toBe('Diaria · queda 1')
+    expect(repeticionResumen({ freq: 'DAILY', count: 15 })).toBe('Diaria · 15 veces')
+  })
+})
 
 describe('formToPayload', () => {
   it('una vez no lleva campos de repetición', () => {

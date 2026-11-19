@@ -1,6 +1,7 @@
 package com.cauce.feature.alarmas.device
 
 import android.content.Context
+import android.util.Log
 import com.cauce.core.events.cauceServices
 import com.cauce.feature.alarmas.SnoozeOutcome
 import com.cauce.feature.alarmas.alarmaAtendida
@@ -14,9 +15,11 @@ import com.cauce.feature.alarmas.hasAtendida
 import com.cauce.feature.alarmas.nextSnoozeOutcome
 import com.cauce.feature.alarmas.shouldRing
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The four things a firing can turn into, shared by the receivers and the full-screen activity.
@@ -27,9 +30,11 @@ internal object AlarmActions {
 
     /**
      * The alarm rang: record `alarma_disparada`, deactivate when the calendar just ran out
-     * (SPEC 2.6, `fin_tratamiento`), post the ringing notification, arm the 2-minute timeout
-     * (SPEC 2.3) and program the next firing. A snooze that comes back after that deactivation
-     * still rings (SPEC §8, agente); only a user deactivation cancels it.
+     * (SPEC 2.6, `fin_tratamiento`), arm the 2-minute timeout (SPEC 2.3), program the next firing
+     * (waiting at most 2 s for it) and only then ring. Ringing is the step that can fail or get the process killed, so the
+     * timeout and the next firing are already in `AlarmManager` when it starts. A snooze that
+     * comes back after that deactivation still rings (SPEC §8, agente); only a user deactivation
+     * cancels it.
      */
     suspend fun fire(context: Context, alarmaId: String, programadaPara: String, snoozed: Boolean) {
         val services = context.cauceServices()
@@ -58,13 +63,48 @@ internal object AlarmActions {
             fireEvents(device, now, alarmaId, programadaParaInstant, snoozed, alarm, zone),
         )
 
-        val notification = AlarmNotifications.build(context, alarm, programadaPara)
-        val ringing = AlarmRingingService.start(
-            context, alarmaId, programadaPara, AlarmNotifications.notificationId(alarmaId), notification,
-        )
-        if (!ringing) AlarmNotifications.post(context, alarm, programadaPara)
-        AlarmScheduler(context).scheduleTimeout(alarmaId, programadaPara, now.plus(2, ChronoUnit.MINUTES))
-        AlarmasRuntime.rescheduleNow(context)
+        logFailure("arming the timeout of $alarmaId") {
+            AlarmScheduler(context).scheduleTimeout(alarmaId, programadaPara, now.plus(2, ChronoUnit.MINUTES))
+        }
+        // Bounded, so a slow reprogram (cold start, another reschedule holding the lock) cannot
+        // delay the sound past the background-start allowance of the alarm; it then runs after.
+        val rescheduled = withTimeoutOrNull(RESCHEDULE_BEFORE_RING_MILLIS) {
+            logFailure("rescheduling after $alarmaId fired") { AlarmasRuntime.rescheduleNow(context) }
+            true
+        } ?: false
+
+        val ringing = try {
+            val notification = AlarmNotifications.build(context, alarm, programadaPara)
+            val fallback = AlarmNotifications.buildFallback(context, alarm, programadaPara)
+            AlarmRingingService.start(
+                context, alarmaId, programadaPara, AlarmNotifications.notificationId(alarmaId),
+                notification, fallback,
+            )
+        } catch (e: RuntimeException) {
+            Log.e(AlarmasRuntime.TAG, "starting the ringing service for $alarmaId failed", e)
+            false
+        }
+        if (!ringing) {
+            logFailure("posting the backup notification of $alarmaId") {
+                AlarmNotifications.post(context, alarm, programadaPara)
+            }
+        }
+        if (!rescheduled) {
+            logFailure("rescheduling after $alarmaId rang") { AlarmasRuntime.rescheduleNow(context) }
+        }
+    }
+
+    private const val RESCHEDULE_BEFORE_RING_MILLIS = 2_000L
+
+    /** Runs a step whose failure must not stop the rest of the firing; the cause goes to logcat. */
+    private inline fun logFailure(what: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(AlarmasRuntime.TAG, "$what failed", e)
+        }
     }
 
     /**

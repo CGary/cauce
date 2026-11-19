@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { browserTimeZone } from '../../../core/time'
 import { server } from '../../../mocks/node'
 import { renderApp } from '../../../test/render'
@@ -86,6 +86,176 @@ const REUNION_GOOGLE = {
   repeticion: null,
   proximo_disparo: '2026-11-02T13:30:00Z',
 }
+
+// El formulario rechaza fechas pasadas con el reloj del navegador: se fija antes de
+// todas las fechas de los casos (nov 2026) para que no dependan del día en que corren.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-20T12:00:00Z'))
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+function icsFile(lines: string[]): File {
+  return new File([['BEGIN:VCALENDAR', ...lines, 'END:VCALENDAR'].join('\n')], 'alarmas.ics', {
+    type: 'text/calendar',
+  })
+}
+
+describe('ActivasView: lo que se envía es lo que se ve', () => {
+  it('remedio cada 8 h y luego Diaria: el intervalo vuelve a vacío y no viaja', async () => {
+    const pushed = capturePush()
+    renderApp('/alarmas/activas')
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva alarma' }))
+    await userEvent.type(screen.getByLabelText('Título'), 'Amoxicilina')
+    await userEvent.selectOptions(screen.getByLabelText('Tipo'), 'remedio')
+    expect(screen.getByRole('radio', { name: '8 h' })).toBeChecked()
+    await userEvent.selectOptions(screen.getByLabelText('Repetición'), 'DAILY')
+    expect(screen.getByLabelText('Intervalo')).toHaveValue(null)
+    await userEvent.type(screen.getByLabelText('Destinatario'), 'Juan')
+    await userEvent.type(screen.getByLabelText('Remedio'), 'Amoxicilina')
+    await userEvent.click(screen.getByRole('button', { name: 'Crear' }))
+    await waitFor(() => expect(pushed()?.events).toHaveLength(1))
+    expect(pushed()?.events[0]?.payload.repeticion).toEqual({ freq: 'DAILY' })
+  })
+
+  it('Diaria cada 5 y luego «Cada N horas» sin opción elegida: error, no se empuja', async () => {
+    const pushed = capturePush()
+    renderApp('/alarmas/activas')
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva alarma' }))
+    await userEvent.type(screen.getByLabelText('Título'), 'Agua')
+    await userEvent.selectOptions(screen.getByLabelText('Repetición'), 'DAILY')
+    await userEvent.type(screen.getByLabelText('Intervalo'), '5')
+    await userEvent.selectOptions(screen.getByLabelText('Repetición'), 'HOURLY')
+    for (const hours of ['4 h', '6 h', '8 h', '12 h', 'Otro']) {
+      expect(screen.getByRole('radio', { name: hours })).not.toBeChecked()
+    }
+    await userEvent.click(screen.getByRole('button', { name: 'Crear' }))
+    expect(await screen.findByText(/El intervalo es obligatorio/)).toBeInTheDocument()
+    expect(pushed()).toBeUndefined()
+  })
+
+  it('una puntual con fecha pasada muestra el error en la fecha y no se empuja', async () => {
+    const pushed = capturePush()
+    renderApp('/alarmas/activas')
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva alarma' }))
+    await userEvent.type(screen.getByLabelText('Título'), 'Llamar')
+    fireEvent.change(screen.getByLabelText('Fecha de inicio'), { target: { value: '2026-10-01' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Crear' }))
+    expect(screen.getByLabelText('Fecha de inicio')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText(/La fecha y la hora ya pasaron/)).toBeInTheDocument()
+    expect(pushed()).toBeUndefined()
+  })
+
+  it('«Hasta» anterior al inicio muestra el error en Hasta y no se empuja', async () => {
+    const pushed = capturePush()
+    renderApp('/alarmas/activas')
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva alarma' }))
+    await userEvent.type(screen.getByLabelText('Título'), 'Vitaminas')
+    fireEvent.change(screen.getByLabelText('Fecha de inicio'), { target: { value: '2026-12-10' } })
+    await userEvent.selectOptions(screen.getByLabelText('Repetición'), 'DAILY')
+    await userEvent.selectOptions(screen.getByLabelText('Límite'), 'until')
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-12-01' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Crear' }))
+    expect(screen.getByLabelText('Hasta')).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByText(/anterior a la fecha de inicio/)).toBeInTheDocument()
+    expect(pushed()).toBeUndefined()
+  })
+
+  it('una cantidad enorme es un error en línea y no se empuja', async () => {
+    const pushed = capturePush()
+    renderApp('/alarmas/activas')
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva alarma' }))
+    await userEvent.type(screen.getByLabelText('Título'), 'Vitaminas')
+    await userEvent.selectOptions(screen.getByLabelText('Repetición'), 'DAILY')
+    await userEvent.selectOptions(screen.getByLabelText('Límite'), 'count')
+    fireEvent.change(screen.getByLabelText('Cantidad'), {
+      target: { value: '99999999999999999999' },
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Crear' }))
+    expect(screen.getByText(/entre 1 y 1000/)).toBeInTheDocument()
+    expect(pushed()).toBeUndefined()
+  })
+
+  it('el resumen usa `restantes` de P1 y dice cada cuántas horas', async () => {
+    server.use(
+      http.get(URL_P1, () =>
+        HttpResponse.json([
+          {
+            alarma_id: 'h1',
+            titulo: 'Amoxicilina',
+            tipo: 'otro',
+            hora: '08:00',
+            repeticion: { freq: 'HOURLY', interval: 8, count: 15 },
+            proximo_disparo: '2026-11-02T12:00:00Z',
+            restantes: 7,
+          },
+        ]),
+      ),
+    )
+    renderApp('/alarmas/activas')
+    const table = await screen.findByRole('table', { name: 'Alarmas activas' })
+    const row = within(table).getByRole('row', { name: /Amoxicilina/ })
+    expect(row).toHaveTextContent('Cada 8 horas · quedan 7')
+    expect(row).not.toHaveTextContent('15 veces')
+  })
+
+  it('el resultado de importar (éxito y errores) va junto, se reemplaza y se limpia', async () => {
+    const pushed = capturePush()
+    renderApp('/alarmas/activas')
+    await screen.findByRole('table', { name: 'Alarmas activas' })
+    await userEvent.upload(
+      screen.getByLabelText('Importar ICS'),
+      icsFile([
+        'BEGIN:VEVENT',
+        'SUMMARY:Mala',
+        'DTSTART:20261102T090000',
+        'RRULE:FREQ=DAILY;COUNT=99999999999999999999',
+        'END:VEVENT',
+        'BEGIN:VEVENT',
+        'SUMMARY:Buena',
+        'DTSTART:20261102T090000',
+        'RRULE:FREQ=DAILY',
+        'END:VEVENT',
+      ]),
+    )
+    const result = await screen.findByRole('region', { name: 'Resultado de la importación' })
+    await waitFor(() => expect(result).toHaveTextContent('Se cargó 1 alarma.'))
+    expect(within(result).getByRole('alert')).toHaveTextContent(
+      'Evento 1: count tiene que ser un entero entre 1 y 1000',
+    )
+    expect(pushed()?.events).toHaveLength(1)
+
+    // Una importación nueva reemplaza el resultado anterior.
+    await userEvent.upload(
+      screen.getByLabelText('Importar ICS'),
+      icsFile(['BEGIN:VEVENT', 'SUMMARY:Otra', 'DTSTART:20261103T090000', 'END:VEVENT']),
+    )
+    await waitFor(() =>
+      expect(
+        screen.getByRole('region', { name: 'Resultado de la importación' }),
+      ).not.toHaveTextContent('Evento 1'),
+    )
+    expect(screen.getByRole('region', { name: 'Resultado de la importación' })).toHaveTextContent(
+      'Se cargó 1 alarma.',
+    )
+
+    // Una acción posterior que sale bien lo limpia.
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar Vitaminas' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar eliminación' }))
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('region', { name: 'Resultado de la importación' }),
+      ).not.toBeInTheDocument(),
+    )
+  })
+})
 
 describe('ActivasView (P1)', () => {
   it('muestra las alarmas del fixture y pide tz sin now', async () => {

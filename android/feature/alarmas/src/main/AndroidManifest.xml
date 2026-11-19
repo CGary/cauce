@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
     <!-- The CPU stays awake while the alarm rings. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- The phone vibrates while the alarm rings; without it `Vibrator.vibrate` throws and the
+         ringing service crashes. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Alarms survive reboots (2.7). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -42,6 +45,8 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <!-- After an APK update, re-arm everything without waiting for the app to be opened. -->
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>

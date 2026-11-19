@@ -4,6 +4,8 @@ import type { AlarmaFormState } from '../model'
 import type { AlarmaPayload } from '../types'
 import {
   HOURLY_PRESETS,
+  MAX_COUNT,
+  MAX_INTERVAL,
   WEEKDAY_LABEL,
   WEEKDAYS,
   dosesForDays,
@@ -186,9 +188,14 @@ export function AlarmaForm({
               value={form.freq}
               onChange={(event) => {
                 const freq = event.target.value as AlarmaFormState['freq']
+                // El intervalo vuelve al valor visible de la nueva frecuencia: vacío (= 1) en
+                // diaria/semanal/mensual y sin opción elegida en «cada N horas». Así lo que se
+                // envía es siempre lo que se ve (un 8 h no pasa a ser «cada 8 días»).
+                setOtherHours(false)
                 setForm((prev) => ({
                   ...prev,
                   freq,
+                  interval: '',
                   limit: freq !== 'HOURLY' && prev.limit === 'days' ? 'none' : prev.limit,
                 }))
               }}
@@ -241,8 +248,8 @@ export function AlarmaForm({
                   type="number"
                   inputMode="numeric"
                   min={1}
+                  max={MAX_INTERVAL}
                   value={form.interval}
-                  placeholder="1"
                   onChange={(event) => set('interval', event.target.value)}
                 />
               )}
@@ -263,6 +270,7 @@ export function AlarmaForm({
                   className={inputClass}
                   type="number"
                   min={1}
+                  max={MAX_INTERVAL}
                   value={form.interval}
                   placeholder="1"
                   onChange={(event) => set('interval', event.target.value)}
@@ -311,6 +319,7 @@ export function AlarmaForm({
                   className={inputClass}
                   type="number"
                   min={1}
+                  max={MAX_COUNT}
                   value={form.count}
                   onChange={(event) => set('count', event.target.value)}
                 />

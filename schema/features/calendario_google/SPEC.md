@@ -4,7 +4,7 @@
 |--------------|-------|
 | id           | `calendario_google` |
 | estado       | `activo` |
-| versión spec | `1` |
+| versión spec | `2` |
 | superficies  | `android`, `web` |
 
 ## 1. Problema
@@ -110,7 +110,9 @@ Convenciones: todo `datetime` es RFC 3339 en UTC (`...Z`). La zona local entra c
 - (agente) La edición del aviso en Android ofrece "minutos antes" para reuniones con hora y "a una hora" para las de todo el día, más "apagado" en ambas.
 - (agente) Mi respuesta se lee de `SELF_ATTENDEE_STATUS` del proveedor (derivada de mi asistente en `Attendees`); `ATTENDEE_RELATIONSHIP` no tiene un valor "yo" en Android.
 - (agente) Consola web: el estado vacío de «Reuniones próximas» muestra la hora de la última lectura de la proyección, para distinguir «sin reuniones» de «datos viejos»; tras guardar un aviso avisa que el teléfono lo aplica en su próximo pull.
+- (agente) Consola web: «Minutos antes» acepta de 0 a 40320 (4 semanas); un valor mayor o que no es un entero seguro es un error en línea y no se empuja, porque un entero enorme rompe las proyecciones del servidor. El schema no cambia.
 
 ## 9. Changelog
 
 - `v1` — 2026-10-28 — creación. Reuniones de todas las cuentas de Google del teléfono, vía calendario de Android; aviso heredado de Google y editable por serie; `alarmas` consume los eventos para sonar. Fixtures iniciales escritos junto con los schemas.
+- `v2` — 2026-11-19 — web sin cambios de eventos, proyecciones ni fixtures: `minutos_antes` del aviso editado tiene tope de 40320 (4 semanas) en el formulario (§8).

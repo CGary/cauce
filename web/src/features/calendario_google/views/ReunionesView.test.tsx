@@ -114,6 +114,20 @@ describe('ReunionesView (P1)', () => {
     expect(pushed()).toBeUndefined()
   })
 
+  it('rechaza minutos por encima del tope (4 semanas) sin empujar', async () => {
+    const pushed = capturePush()
+    const user = userEvent.setup()
+    renderApp('/calendario_google/proximas')
+    await user.click(await screen.findByRole('button', { name: 'Editar aviso de Dentista' }))
+    const form = screen.getByRole('form', { name: 'Aviso de Dentista' })
+    const input = within(form).getByLabelText('Minutos antes', { selector: 'input' })
+    await user.clear(input)
+    await user.type(input, '99999999999999999999')
+    await user.click(within(form).getByRole('button', { name: 'Guardar aviso' }))
+    expect(await screen.findByText(/de 0 a 40320/)).toBeInTheDocument()
+    expect(pushed()).toBeUndefined()
+  })
+
   it('apagar empuja solo apagado: true', async () => {
     const pushed = capturePush()
     const user = userEvent.setup()

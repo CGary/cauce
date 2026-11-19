@@ -62,6 +62,12 @@ export function initialForm(row: Reunion): AvisoForm {
   }
 }
 
+/**
+ * Tope de `minutos_antes` en la web: 4 semanas (SPEC §8, agente). Sin tope, un número
+ * enorme llega al servidor y rompe las proyecciones (Go lo decodifica en `int`).
+ */
+export const MAX_MINUTOS_ANTES = 40320
+
 const HORA = /^([01][0-9]|2[0-3]):[0-5][0-9]$/
 
 /** Valida el formulario y arma el payload con exactamente una de las tres claves. */
@@ -74,10 +80,15 @@ export function avisoPayload(
     if (!HORA.test(form.hora)) return { ok: false, error: 'Usá una hora válida (HH:MM)' }
     return { ok: true, payload: { serie_id: serieId, hora: form.hora } }
   }
-  if (!/^\d+$/.test(form.minutos.trim())) {
+  const minutos = form.minutos.trim()
+  if (!/^\d+$/.test(minutos)) {
     return { ok: false, error: 'Los minutos son un entero de 0 o más' }
   }
-  return { ok: true, payload: { serie_id: serieId, minutos_antes: Number(form.minutos.trim()) } }
+  const n = Number(minutos)
+  if (!Number.isSafeInteger(n) || n > MAX_MINUTOS_ANTES) {
+    return { ok: false, error: `Los minutos van de 0 a ${MAX_MINUTOS_ANTES} (4 semanas)` }
+  }
+  return { ok: true, payload: { serie_id: serieId, minutos_antes: n } }
 }
 
 const fechaHora = new Intl.DateTimeFormat('es', {

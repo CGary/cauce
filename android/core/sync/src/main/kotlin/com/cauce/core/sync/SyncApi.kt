@@ -44,11 +44,17 @@ interface SyncApi {
     suspend fun presign(key: String, contentType: String): PresignResponse
 }
 
+/**
+ * Talks to the Go server directly. Every call carries `Authorization: Bearer <apiToken>` (D20);
+ * the presigned PUT to object storage does not, because it goes to another host.
+ */
 class HttpSyncApi(
     baseUrl: String,
-    private val headers: Map<String, String> = emptyMap(),
+    apiToken: String,
+    extraHeaders: Map<String, String> = emptyMap(),
 ) : SyncApi {
     private val base = baseUrl.trimEnd('/')
+    private val headers: Map<String, String> = extraHeaders + authHeaders(apiToken)
 
     override suspend fun push(events: List<Envelope>): PushResponse {
         val body = CauceJson.wire.encodeToString(PushRequest.serializer(), PushRequest(events))
@@ -69,6 +75,12 @@ class HttpSyncApi(
         val response = HttpTransport.request("POST", "$base/blobs/presign", body, headers)
         return CauceJson.wire.decodeFromString(PresignResponse.serializer(), response)
     }
+}
+
+/** The header every server call carries. A blank token is a wiring bug, not a runtime state. */
+internal fun authHeaders(apiToken: String): Map<String, String> {
+    require(apiToken.isNotBlank()) { "apiToken is blank: build the APK with -PcauceApiToken (D20)" }
+    return mapOf("Authorization" to "Bearer ${apiToken.trim()}")
 }
 
 internal object HttpTransport {

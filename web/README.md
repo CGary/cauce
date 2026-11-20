@@ -16,16 +16,18 @@ cp .env.example .env   # opcional en desarrollo
 
 ## Correr
 
-| Comando            | Qué hace                                                                                                            |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`      | Servidor de desarrollo. `/api` se redirige por proxy a `http://localhost:8080`, el servidor Go (`just server-run`). |
-| `npm run dev:mock` | La UI contra MSW, sin servidor Go. Los datos son los valores `expected` de `schema/features/<id>/fixtures`.         |
+| Comando            | Qué hace                                                                                                                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`      | Servidor de desarrollo. `/api` y `/sync` se redirigen por proxy a `http://localhost:8080`, el servidor Go (`just server-run`), con el bearer de `CAUCE_API_TOKEN` si está definido. |
+| `npm run dev:mock` | La UI contra MSW, sin servidor Go. Los datos son los valores `expected` de `schema/features/<id>/fixtures`.                                                                         |
 
 ## Variables
 
-| Variable        | Dónde                                                            | Valor                                                                                                   |
-| --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `VITE_API_BASE` | `.env` (ignorado por git) o la configuración de Cloudflare Pages | Origen del servidor Go, sin barra final. Vacío significa mismo origen: en desarrollo, el proxy de Vite. |
+| Variable               | Dónde                                                            | Valor                                                                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_BASE`        | `.env` (ignorado por git) o la configuración de Cloudflare Pages | Origen del servidor Go, sin barra final. Vacío significa mismo origen: en desarrollo, el proxy de Vite.                                                                            |
+| `CAUCE_API_TOKEN`      | `web/.env` (ignorado por git), solo desarrollo                   | El token del servidor (D20). El proxy de Vite lo agrega como `Authorization: Bearer` a `/api` y `/sync`. Nunca con prefijo `VITE_`; el build falla si el valor aparece en `dist/`. |
+| `CAUCE_DEV_API_ORIGIN` | `web/.env`, opcional                                             | Destino del proxy de desarrollo; default `http://localhost:8080`.                                                                                                                  |
 
 `.env.example` documenta la variable. `.env.mock` solo activa MSW en `--mode mock` y no tiene secretos.
 
@@ -59,7 +61,7 @@ La salida queda en `dist/`. MSW y su service worker no entran al build.
 - **CLI:** también se puede desplegar a mano con `npm run build` (con `VITE_API_BASE` vacía) y, desde la raíz del repo, `wrangler pages deploy web/dist --project-name <proyecto>`.
 - **`_redirects`:** `public/_redirects` (`/*    /index.html   200`) es el fallback de SPA; Vite lo copia a `dist/`.
 - **CORS:** con el proxy de mismo origen no hace falta. Solo si alguien llama a la API desde otro origen, el servidor debe permitirlo con `CAUCE_CORS_ORIGIN` (ver `server/.env.example`), con el origen de la web.
-- **Acceso:** Cloudflare Access (login con Google) delante del sitio y de la API. Las peticiones salen con `credentials: 'include'`; con el proxy de mismo origen la cookie de Access del sitio viaja con ellas.
+- **Acceso (D20):** Cloudflare Access (login con Google) va delante del sitio, pero la Function no confía en eso: cada deploy tiene además su propio hostname `<hash>.<proyecto>.pages.dev`. `functions/_shared/proxy.ts` verifica en cada petición el JWT de Access (cabecera `Cf-Access-Jwt-Assertion` o cookie `CF_Authorization`; RS256 con las claves de `https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`, `aud`, `iss`, `exp`, `nbf`) y recién entonces reenvía a `API_ORIGIN` con `Authorization: Bearer <API_TOKEN>`, sin pasar la `Authorization`, las cookies ni las cabeceras `Cf-Access-*` del navegador. Sin configuración o sin JWT válido responde `403` JSON y no contacta al origen. Secretos del proyecto de Pages: `API_ORIGIN`, `API_TOKEN`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` y, opcional, `ACCESS_ALLOWED_EMAIL`. Los tests están en `functions-test/` (fuera de `functions/` para que Pages no los tome como rutas). Detalle y rollout en `docs/DEPLOY-OPTIPLEX.md` («Autenticación»).
 
 ## Agregar un feature
 

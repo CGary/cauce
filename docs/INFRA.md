@@ -62,16 +62,15 @@ No se abre ningún puerto en el router; la IP de casa no importa.
 | Tailscale Serve | Sí: la misma URL | No | Solo dispositivos dentro de la tailnet |
 | Túnel con nombre de Cloudflare + Access | Sí | Sí (es el destino final) | Solo quien pase Access |
 
-El servidor no autentica por sí mismo: confía en el proxy y usa `CAUCE_USER_ID`, así que cualquier opción pública queda abierta a quien conozca la URL hasta que exista Access. Y la consola web en otro origen necesita `CAUCE_CORS_ORIGIN` en el servidor.
+El servidor autentica por sí mismo con un token compartido (`CAUCE_API_TOKEN`, D20): cualquier opción pública responde 401 sin `Authorization: Bearer <token>`, salvo `/healthz`. La consola web llama por su Pages Function (D14), que exige además el login de Access.
 
 ## Cloudflare Access
 
 Dos aplicaciones en Zero Trust → Access:
 
-1. **`api.<tu-dominio>`** — política *Allow*: emails = el tuyo (login Google) **y** un *Service Token* llamado `android-app`. La app manda los headers `CF-Access-Client-Id` / `CF-Access-Client-Secret` en cada request. Guardá el secret en el teléfono con `EncryptedSharedPreferences`; se pega una vez en una pantalla de ajustes.
-2. **`app.<tu-dominio>`** (Pages) — política *Allow*: tu email.
+Una aplicación en Zero Trust → Access, para la consola en Pages — política *Allow*: tu email (login Google). La API no necesita aplicación de Access: el servidor exige su propio token y el teléfono lo manda como `Authorization: Bearer` (D20).
 
-El servidor Go confía en que solo llegan requests que pasaron por Access. Si querés endurecerlo, validá el JWT de `Cf-Access-Jwt-Assertion` contra el JWKS de tu equipo; es una función de 30 líneas y está en el roadmap como opcional.
+La Pages Function no confía en que Access esté delante: verifica en cada petición el JWT de `Cf-Access-Jwt-Assertion` (o la cookie `CF_Authorization`) contra las claves del equipo y recién entonces reenvía al servidor con el token. Secretos y rollout en [`DEPLOY-OPTIPLEX.md`](DEPLOY-OPTIPLEX.md#autenticación).
 
 ## R2
 

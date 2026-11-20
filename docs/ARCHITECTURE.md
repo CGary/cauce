@@ -110,7 +110,7 @@ Un feature se comunica con otro **solo** produciendo o consumiendo eventos, y es
 
 ## 8. Autenticación
 
-Un usuario, dos credenciales, una identidad. La web entra con Cloudflare Access (login con Google) y la app con un service token. Ambas llegan al servidor como el mismo usuario: `auth.UserFromRequest` las mapea y `/sync/push` acepta las dos. Internamente devuelve `CAUCE_USER_ID` de la configuración. Es la única función que cambiaría si hubiera auth real; nada más del código sabe cómo se identifica un usuario.
+Un usuario, dos cerrojos, una identidad (D20). El servidor exige en toda ruta salvo `/healthz` un token compartido (`Authorization: Bearer <CAUCE_API_TOKEN>`): el teléfono lo manda directo y la web lo recibe de su Pages Function, que antes verifica el login de Cloudflare Access (Google). El login humano vive solo en ese borde y se puede cambiar sin tocar servidor ni teléfono. Pasado el token, `auth.UserFromRequest` devuelve `CAUCE_USER_ID` de la configuración. Es la única función que cambiaría si hubiera más usuarios; nada más del código sabe cómo se identifica un usuario.
 
 ## 9. Lo que deliberadamente no hay
 

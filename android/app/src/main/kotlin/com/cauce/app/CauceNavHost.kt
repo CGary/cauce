@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.cauce.core.events.cauceServices
+import com.cauce.core.sync.SyncFeedback
 import com.cauce.core.ui.Card
 import com.cauce.core.ui.CauceSpacing
 import com.cauce.core.ui.Screen
@@ -49,8 +50,12 @@ fun CauceNavHost(navController: NavHostController = rememberNavController()) {
     NavHost(navController = navController, startDestination = HOME) {
         composable(HOME) {
             val alarmas = rememberAlarmasHomeSummary()
+            val syncProblem by SyncFeedback.problem.collectAsStateWithLifecycle()
             Screen(title = "Cauce") {
                 SyncStatusText()
+                syncProblem?.let { message ->
+                    Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
                 HomeCard(
                     title = "Alarmas",
                     subtitle = alarmas.proxima,

@@ -86,6 +86,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Fail closed before touching the database: no token, no server (D20).
+	authCfg, err := auth.ConfigFromEnv()
+	if err != nil {
+		return err
+	}
+	log.Print(authCfg.Describe())
 	validator, err := event.NewValidator()
 	if err != nil {
 		return err
@@ -116,9 +122,11 @@ func run() error {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// CORS answers preflights before the token check; every other request
+	// needs the bearer token except GET /healthz.
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           cors.Middleware(cfg.CORSOrigin, mux),
+		Handler:           cors.Middleware(cfg.CORSOrigin, auth.Require(authCfg, mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

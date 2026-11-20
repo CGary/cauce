@@ -8,7 +8,7 @@ and `docs/INFRA.md` for deployment.
 
 ```
 cmd/cauce/                 wiring only: config, store, mux, workers
-internal/auth/             auth.UserFromRequest (CAUCE_USER_ID in phase 2)
+internal/auth/             bearer-token middleware (CAUCE_API_TOKEN) + auth.UserFromRequest (CAUCE_USER_ID)
 internal/config/           env-only configuration
 internal/core/event/       Envelope, JSON, embedded JSON Schema validation
 internal/core/store/       SQLite (modernc.org/sqlite), sqlc-generated queries
@@ -40,6 +40,8 @@ go run ./cmd/cauce
 | `CAUCE_ADDR` | no | `:8080` | listen address |
 | `CAUCE_DB_PATH` | no | `cauce.db` | SQLite file; parent dir is created |
 | `CAUCE_USER_ID` | yes | — | single user id returned by `auth.UserFromRequest` |
+| `CAUCE_API_TOKEN` | yes (unless `CAUCE_AUTH=off`) | — | shared bearer token, at least 32 chars; every route except `GET /healthz` requires `Authorization: Bearer <token>` (D20). The server refuses to start without it |
+| `CAUCE_AUTH` | no | on | `off` disables the token check (local dev, isolated tests only); startup logs which mode is active |
 | `CAUCE_CORS_ORIGIN` | no | — (disabled) | exact origin of the web console (e.g. `https://example.pages.dev`); empty disables CORS |
 | `R2_ACCOUNT_ID` | for blobs | — | R2 account, endpoint is `https://<id>.r2.cloudflarestorage.com` |
 | `R2_ACCESS_KEY_ID` | for blobs | — | R2 token |
@@ -100,6 +102,8 @@ cd server && go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.27.0 generate
 | `GET` | `/api/projections/{feature}/{name}` | runs a pure projection over the user's events |
 | `GET` | `/healthz` | `{"status":"ok"}` |
 
+Every endpoint except `GET /healthz` answers `401` (JSON `{"error": ...}`,
+`WWW-Authenticate: Bearer`) without `Authorization: Bearer <CAUCE_API_TOKEN>`.
 Identity always comes from `auth.UserFromRequest` (phase 2 reads
 `CAUCE_USER_ID`); the body `user_id` must match it and is never trusted for
 authorization.
@@ -114,10 +118,12 @@ passed through untouched.
 
 ### Push + pull round-trip
 
-With the server running (`CAUCE_USER_ID=u1`):
+With the server running (`CAUCE_USER_ID=u1` and `CAUCE_API_TOKEN` exported in the
+same shell; with `CAUCE_AUTH=off` drop the `Authorization` header):
 
 ```bash
 curl -sS -X POST http://localhost:8080/sync/push \
+  -H "Authorization: Bearer $CAUCE_API_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"events":[{"id":"0192e4a1-7f3c-7a2b-9c1d-4e5f6a7b8c9d","user_id":"u1",
        "device_id":"curl","type":"alarma_creada","v":2,"ts":"2026-10-20T10:00:00Z",
@@ -125,7 +131,7 @@ curl -sS -X POST http://localhost:8080/sync/push \
        "repeticion":{"freq":"DAILY"}}}]}'
 # {"accepted":1,"duplicates":0}
 
-curl -sS 'http://localhost:8080/sync/pull?since=0'
+curl -sS -H "Authorization: Bearer $CAUCE_API_TOKEN" 'http://localhost:8080/sync/pull?since=0'
 # {"events":[{"id":"0192e4a1-...","user_id":"u1",...,"server_seq":1}],"next_since":1}
 
 # pushing the same id again is idempotent

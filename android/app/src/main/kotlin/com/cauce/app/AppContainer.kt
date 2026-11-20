@@ -21,7 +21,7 @@ class AppContainer(context: Context) {
 
     val projections: ProjectionRegistry = ProjectionRegistry.aggregate(FeatureRegistry.features)
 
-    private val api = HttpSyncApi(baseUrl = BuildConfig.SYNC_BASE_URL)
+    private val api = HttpSyncApi(baseUrl = BuildConfig.SYNC_BASE_URL, apiToken = BuildConfig.API_TOKEN)
 
     val syncEngine = SyncEngine(
         store = eventStore,

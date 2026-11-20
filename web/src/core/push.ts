@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { API_BASE } from './api'
+import { API_BASE, AUTH_PROBLEM } from './api'
 
 /** Error de validación del servidor: el mensaje exacto del 400 de /sync/push. */
 export class PushError extends Error {
@@ -91,7 +91,9 @@ export function buildEvent(
 }
 
 /** Cuerpo de `POST /sync/push`: los sobres completos, el servidor los valida contra el contrato. */
-export async function pushEvents(events: EventEnvelope[]): Promise<{ accepted: number; duplicates: number }> {
+export async function pushEvents(
+  events: EventEnvelope[],
+): Promise<{ accepted: number; duplicates: number }> {
   let res: Response
   try {
     res = await fetch(`${API_BASE}/sync/push`, {
@@ -105,6 +107,9 @@ export async function pushEvents(events: EventEnvelope[]): Promise<{ accepted: n
   }
   if (res.ok) {
     return (await res.json()) as { accepted: number; duplicates: number }
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new PushError(res.status, `${AUTH_PROBLEM} (${res.status}).`)
   }
   if (res.status !== 400) {
     throw new PushError(res.status, `HTTP ${res.status} ${res.statusText}`.trim())

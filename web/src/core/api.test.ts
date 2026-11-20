@@ -72,7 +72,10 @@ describe('describeError', () => {
     })
     expect(describeError(new ApiError(502, ''), true).cause).toBe('la API respondió 502')
     expect(describeError(new ApiError(404, ''), true).cause).toContain('404')
-    expect(describeError(new ApiError(403, ''), true).cause).toContain('rechazó el acceso')
+    expect(describeError(new ApiError(403, ''), true).cause).toMatch(
+      /^Sesión no válida o acceso no configurado/,
+    )
+    expect(describeError(new ApiError(401, ''), true).cause).toContain('(401)')
     expect(describeError(new Error('boom'), true)).toEqual({
       cause: 'error inesperado',
       detail: 'boom',

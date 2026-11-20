@@ -39,6 +39,13 @@ apk:
         echo "Falta cauceSyncBaseUrl: defínela en ~/.gradle/gradle.properties o exporta CAUCE_SYNC_BASE_URL (ver android/README.md)." >&2
         exit 1
     fi
+    # El token viaja por variable de entorno de Gradle, no por la línea de comandos (no queda en ps).
+    if [ -n "${CAUCE_API_TOKEN:-}" ]; then
+        export ORG_GRADLE_PROJECT_cauceApiToken="$CAUCE_API_TOKEN"
+    elif ! grep -q '^cauceApiToken=' ~/.gradle/gradle.properties 2>/dev/null; then
+        echo "Falta cauceApiToken: defínelo en ~/.gradle/gradle.properties o exporta CAUCE_API_TOKEN (ver android/README.md y D20)." >&2
+        exit 1
+    fi
     cd android && ./gradlew :app:assembleDebug $extra && find . -name '*.apk' -path '*debug*'
 
 # Corre el servidor con go run, sin Docker (lee server/.env)
@@ -48,6 +55,10 @@ server-run:
     if [ -f server/.env ]; then set -a; . ./server/.env; set +a; fi
     if [ -z "${CAUCE_USER_ID:-}" ]; then
         echo "CAUCE_USER_ID is not set. Create server/.env from server/.env.example or export it." >&2
+        exit 1
+    fi
+    if [ -z "${CAUCE_API_TOKEN:-}" ] && [ "${CAUCE_AUTH:-}" != off ]; then
+        echo "CAUCE_API_TOKEN is not set: put one in server/.env (openssl rand -hex 32) or export CAUCE_AUTH=off for local development." >&2
         exit 1
     fi
     cd server && exec go run ./cmd/cauce
@@ -63,6 +74,10 @@ up:
     fi
     set -a; . ./server/.env; set +a
     if [ -z "${CAUCE_USER_ID:-}" ]; then echo "Set CAUCE_USER_ID in server/.env, then run just up again." >&2; exit 1; fi
+    if [ -z "${CAUCE_API_TOKEN:-}" ] && [ "${CAUCE_AUTH:-}" != off ]; then
+        echo "Set CAUCE_API_TOKEN in server/.env (at least 32 characters: openssl rand -hex 32), then run just up again. The server refuses to start without it (D20)." >&2
+        exit 1
+    fi
     export CAUCE_UID="$(id -u)" CAUCE_GID="$(id -g)"
     mkdir -p "${CAUCE_DATA_DIR:-./deploy/data}"
     docker compose up -d --build cauce

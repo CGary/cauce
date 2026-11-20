@@ -37,7 +37,11 @@ describe('uuidv7', () => {
 
 describe('buildEvent', () => {
   it('arma el sobre completo según envelope.v1.json con device_id "web"', () => {
-    const ev = buildEvent('alarma_creada', { nombre: 'Lunes' }, { ts: '2026-10-23T10:00:00Z', userId: 'u1' })
+    const ev = buildEvent(
+      'alarma_creada',
+      { nombre: 'Lunes' },
+      { ts: '2026-10-23T10:00:00Z', userId: 'u1' },
+    )
     expect(Object.keys(ev).sort()).toEqual(
       ['device_id', 'id', 'payload', 'ts', 'type', 'user_id', 'v'].sort(),
     )
@@ -72,7 +76,10 @@ describe('pushEvents', () => {
   it('lanza PushError con el mensaje de validación del 400', async () => {
     server.use(
       http.post('*/sync/push', () =>
-        HttpResponse.json({ error: 'events[0]: payload requires property "tipo"' }, { status: 400 }),
+        HttpResponse.json(
+          { error: 'events[0]: payload requires property "tipo"' },
+          { status: 400 },
+        ),
       ),
     )
     const error = await pushEvents(envelopes).catch((e: unknown) => e)
@@ -87,6 +94,16 @@ describe('pushEvents', () => {
     server.use(http.post('*/sync/push', () => new HttpResponse(null, { status: 503 })))
     await expect(pushEvents(envelopes)).rejects.toMatchObject({ name: 'PushError', status: 503 })
   })
+
+  it.each([401, 403])(
+    'un %i de la Function o del servidor muestra el aviso de sesión',
+    async (status) => {
+      server.use(http.post('*/sync/push', () => HttpResponse.json({ error: 'x' }, { status })))
+      const error = await pushEvents(envelopes).catch((e: unknown) => e)
+      expect(error).toMatchObject({ name: 'PushError', status })
+      expect((error as PushError).message).toMatch(/^Sesión no válida o acceso no configurado/)
+    },
+  )
 
   it('lanza PushError 0 si no hay respuesta', async () => {
     server.use(http.post('*/sync/push', () => HttpResponse.error()))
@@ -112,7 +129,11 @@ describe('usePushEvents', () => {
         const mutation = usePushEvents()
         return { query, mutation }
       },
-      { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> },
+      {
+        wrapper: ({ children }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        ),
+      },
     )
     await waitFor(() => expect(result.current.query.data).toEqual([{ n: 1 }]))
 
@@ -140,7 +161,9 @@ describe('usePushEvents', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
     const { result } = renderHook(() => usePushEvents(), {
-      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
     })
 
     act(() => {

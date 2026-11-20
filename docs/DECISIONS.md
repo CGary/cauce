@@ -105,3 +105,17 @@ Contexto: reintentar sin criterio oculta errores reales (4xx) o retrasa el aviso
 Decisión: las consultas reintentan como máximo 2 veces con backoff exponencial; no reintentan ante 4xx; ante errores de red hacen un solo reintento. El panel de error muestra una causa breve y deja el detalle técnico plegado.
 
 Consecuencias: un 4xx se muestra de inmediato; una caída del servidor aparece en pocos segundos con su causa.
+
+## D20 — Dos cerrojos: token compartido en el servidor, login humano solo en el borde — 2026-11-19
+
+Contexto: la API respondía sin autenticación. `GET /sync/pull?since=0` por la URL pública de Pages devolvía el log completo, y el origen público del servidor (el que usa el teléfono) estaba igual de abierto. `auth.UserFromRequest` ignoraba la petición y la Pages Function reenviaba sin verificar nada.
+
+Decisión: dos cerrojos independientes.
+
+1. **Servidor: un secreto compartido.** `CAUCE_API_TOKEN` (mínimo 32 caracteres). Toda ruta salvo `GET /healthz` exige `Authorization: Bearer <token>`, comparado en tiempo constante; si no, `401` JSON con `WWW-Authenticate: Bearer`. Es un único middleware en `server/internal/auth`, montado una vez en `cmd/cauce`. Falla cerrado: sin token el servidor no arranca, salvo `CAUCE_AUTH=off` explícito (desarrollo local y tests aislados); al arrancar registra en una línea qué modo está activo, nunca el token.
+2. **Teléfono:** la propiedad de Gradle `cauceApiToken` (como `cauceSyncBaseUrl`, D15: en `~/.gradle/gradle.properties`, nunca en el repo; el build del APK falla sin ella). `core/sync` la manda en cada llamada; un 401 se muestra en Home bajo «Último evento» (D18).
+3. **Web:** Cloudflare Access (login Google) delante de Pages, verificado en la Function: cada petición a `/api/*` y `/sync/*` trae un JWT de Access válido (RS256 con las claves del equipo, `aud`, `iss`, `exp`, `nbf`, email opcional) o recibe `403` sin tocar el origen. Si es válido, la Function agrega `Authorization: Bearer <API_TOKEN>` (secreto de Pages) y no reenvía la `Authorization`, las cookies ni las cabeceras `Cf-Access-*` del navegador. No basta con que Access esté delante: cada deploy de Pages tiene también su hostname `<hash>.<proyecto>.pages.dev`. El token nunca entra al bundle; en desarrollo lo agrega el proxy de Vite y el build falla si aparece en `dist/`.
+
+Cómo refina D9: el token compartido es el «service token» de D9 y D11, pero lo valida el propio servidor, no Access, así que el servidor deja de confiar en la red. `auth.UserFromRequest` sigue siendo la única costura de identidad: pasar el token prueba que quien llama es un cliente del dueño, y la identidad sigue siendo `CAUCE_USER_ID`. El login humano vive solo en el borde (la Function); cambiar Google/Access por otro proveedor es un cambio de `web/functions/` y no toca servidor ni teléfono.
+
+Consecuencias: un token para todos los clientes, así que rotarlo exige actualizar a la vez `server/.env`, el APK y el secreto de Pages (procedimiento en `docs/DEPLOY-OPTIPLEX.md`, «Autenticación»). El token queda dentro del APK (como la URL de D15): quien tenga el APK lo tiene. Con un solo usuario es aceptable; si no, la salida es un token por cliente en el mismo middleware.

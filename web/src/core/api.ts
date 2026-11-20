@@ -11,6 +11,13 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 401/403 de /api o /sync: la Pages Function no pudo verificar la sesión de Cloudflare Access, le
+ * falta configuración, o el servidor rechazó el token (D20). Reintentar no lo arregla.
+ */
+export const AUTH_PROBLEM =
+  'Sesión no válida o acceso no configurado: recargá la página para iniciar sesión de nuevo; si sigue igual, revisá la configuración de Access'
+
 export type ProjectionParams = Record<string, string | undefined>
 
 export const API_BASE: string = import.meta.env.VITE_API_BASE ?? ''
@@ -84,9 +91,7 @@ export function describeError(error: unknown, online: boolean = navigator.onLine
       }
     }
     const detail = `HTTP ${status}`
-    if (status === 401 || status === 403) {
-      return { cause: `la API rechazó el acceso (${status}); iniciá sesión de nuevo`, detail }
-    }
+    if (status === 401 || status === 403) return { cause: `${AUTH_PROBLEM} (${status})`, detail }
     if (status === 404) return { cause: 'la API no encontró esa proyección (404)', detail }
     return { cause: `la API respondió ${status}`, detail }
   }

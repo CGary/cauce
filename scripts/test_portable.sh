@@ -21,15 +21,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cat > server/.env <<'EOF'
-CAUCE_USER_ID=e2e-user
-CAUCE_ADDR=:8080
-EOF
+# Invented token for this throwaway instance: exercises the auth path, never a real secret.
+token="e2e-dummy-token-$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+printf 'CAUCE_USER_ID=e2e-user\nCAUCE_ADDR=:8080\nCAUCE_API_TOKEN=%s\n' "$token" > server/.env
 chmod 600 server/.env
+auth=(-H "Authorization: Bearer $token")
 
 export COMPOSE_PROJECT_NAME="$project" CAUCE_DATA_DIR="$data_dir" CAUCE_HOST_PORT=18089
 just up
 curl -fsS http://127.0.0.1:18089/healthz >/dev/null
+for header in '' 'Authorization: Bearer wrong-token-wrong-token-wrong-token'; do
+  status=$(curl -sS -o /dev/null -w '%{http_code}' ${header:+-H "$header"} 'http://127.0.0.1:18089/sync/pull?since=0')
+  test "$status" = 401 || { echo "expected 401 without a valid token, got $status" >&2; exit 1; }
+done
 
 fixture=$(python3 - <<'PY'
 import json
@@ -41,7 +45,7 @@ event.update(id='e2e-event', user_id='e2e-user', device_id='e2e', ts='2026-10-22
 print(json.dumps({'events': [event]}))
 PY
 )
-curl -fsS -X POST http://127.0.0.1:18089/sync/push -H 'Content-Type: application/json' -d "$fixture" | python3 -c 'import json,sys; assert json.load(sys.stdin)["accepted"] == 1'
+curl -fsS "${auth[@]}" -X POST http://127.0.0.1:18089/sync/push -H 'Content-Type: application/json' -d "$fixture" | python3 -c 'import json,sys; assert json.load(sys.stdin)["accepted"] == 1'
 just backup
 new_backup=$(comm -13 "$backups_before" <(find . -maxdepth 1 -name 'cauce-backup-*.tar.gz' -printf '%f\n' | sort) | sed -n '1p')
 test -n "$new_backup"
@@ -50,7 +54,7 @@ test -f "$backup"
 just down
 rm -rf "$data_dir" && mkdir -p "$data_dir"
 just up
-curl -fsS http://127.0.0.1:18089/sync/pull?since=0 | python3 -c 'import json,sys; assert len(json.load(sys.stdin)["events"]) == 0'
+curl -fsS "${auth[@]}" http://127.0.0.1:18089/sync/pull?since=0 | python3 -c 'import json,sys; assert len(json.load(sys.stdin)["events"]) == 0'
 just restore "$backup"
-curl -fsS http://127.0.0.1:18089/sync/pull?since=0 | python3 -c 'import json,sys; assert len(json.load(sys.stdin)["events"]) == 1'
+curl -fsS "${auth[@]}" http://127.0.0.1:18089/sync/pull?since=0 | python3 -c 'import json,sys; assert len(json.load(sys.stdin)["events"]) == 1'
 echo 'portable e2e: PASS'

@@ -1,2 +1,4 @@
-// /sync/* usa el mismo proxy que /api/*.
-export { onRequest } from '../api/[[path]]'
+// /sync/* usa el mismo proxy verificado que /api/* (ver ../_shared/proxy.ts).
+import { handleProxy } from '../_shared/proxy'
+
+export const onRequest = handleProxy

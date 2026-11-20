@@ -33,6 +33,16 @@ hostname privado del servidor): `cauceSyncBaseUrl=https://<tu-servidor>`. `just 
 está definida; también acepta la variable de entorno `CAUCE_SYNC_BASE_URL`. Ver D15 en
 `docs/DECISIONS.md`.
 
+Token de la API (D20): el servidor exige `Authorization: Bearer <token>`. El build lo lee de la
+propiedad de Gradle `cauceApiToken`, igual que `cauceSyncBaseUrl`: una línea
+`cauceApiToken=<el mismo valor que CAUCE_API_TOKEN del servidor>` en `~/.gradle/gradle.properties`,
+nunca en el repo. `just apk` falla si no está (también acepta la variable `CAUCE_API_TOKEN`), y
+`:app:assembleDebug` falla en la tarea `checkCauceApiToken` si falta o tiene menos de 32
+caracteres; los tests JVM de `:core:*` y `:feature:*` no lo necesitan. El cliente de
+`core/sync` (`HttpSyncApi`) agrega la cabecera a cada llamada al servidor (no al PUT de R2). Si
+el servidor responde 401, Home muestra «Sin sincronizar: el servidor rechazó el token de la app
+(401)…» bajo «Último evento» (`SyncFeedback`), y el worker no reintenta hasta el próximo ciclo.
+
 
 ## Reglas de build
 

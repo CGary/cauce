@@ -46,7 +46,8 @@ No hace falta una unidad de systemd con `docker compose up -d`, y no conviene: s
 1. `systemctl is-active docker tailscaled` → `active` dos veces; `uname -r` muestra el kernel nuevo.
 2. `docker compose ps` → `cauce` en `Up`; `curl -s 127.0.0.1:8080/healthz` → 200.
 3. `tailscale funnel status` → Funnel on, `proxy http://127.0.0.1:8080`; `curl` a `/healthz` por la URL pública del Funnel → 200.
-4. La consola: `https://cauce-web-2dr.pages.dev/api/projections/alarmas/alarmas_activas` → 200 (pasa por la Pages Function y el Funnel).
+4. La API exige token (D20): por la URL del Funnel, `/sync/pull?since=0` sin cabecera → 401; con `Authorization: Bearer …` → 200 (ver [Autenticación](#autenticación)).
+5. La consola: abrir `https://<proyecto>.pages.dev` en el navegador, iniciar sesión con Google y ver la lista de alarmas (pasa por Access, la Pages Function y el Funnel). Sin sesión, `/api/...` responde 403 o redirige al login de Access.
 
 **Si algo no levanta**
 
@@ -60,6 +61,52 @@ No hace falta una unidad de systemd con `docker compose up -d`, y no conviene: s
 | Docker o la red fallan con el kernel nuevo | Arrancar el kernel anterior desde GRUB (Debian conserva el previo) y avisar |
 
 Nunca `docker compose down -v`, `just restore`, borrar `deploy/data/` ni tocar `server/.env`. `cloudflared-quick` cambia de URL en cada reinicio; Cauce no depende de él (usa el Funnel) y no se toca.
+
+## Autenticación
+
+Dos cerrojos independientes (D20 en `DECISIONS.md`): el servidor exige un token compartido y la web exige además un login de Cloudflare Access que la Pages Function verifica. **Ningún valor real va en este repo**: ni el token, ni el dominio del equipo de Access, ni el AUD, ni el email.
+
+### Dónde vive cada secreto
+
+| Nombre | Dónde | Valor |
+|--------|-------|-------|
+| `CAUCE_API_TOKEN` | `server/.env` del servidor (modo 600) | el token; mínimo 32 caracteres. Sin él el servidor no arranca |
+| `cauceApiToken` | `~/.gradle/gradle.properties` de la máquina que compila el APK | el mismo token (queda dentro del APK) |
+| `API_TOKEN` | secreto del proyecto de Pages | el mismo token |
+| `ACCESS_TEAM_DOMAIN` | secreto del proyecto de Pages | `<equipo>.cloudflareaccess.com` |
+| `ACCESS_AUD` | secreto del proyecto de Pages | el *Application Audience (AUD) Tag* de la aplicación de Access |
+| `ACCESS_ALLOWED_EMAIL` | secreto del proyecto de Pages (opcional) | el email del dueño; si está, el JWT debe traer ese email |
+| `API_ORIGIN` | secreto del proyecto de Pages (ya existía, D14) | el origen público del servidor |
+
+Generar el token en el servidor, sin pegarlo en el chat ni en la historia del shell: `openssl rand -hex 32`. Los secretos de Pages se cargan con `wrangler pages secret put <NOMBRE> --project-name <proyecto>` (pide el valor por stdin) o en el panel; un cambio de secreto exige un nuevo deploy de Pages. `CAUCE_AUTH=off` desactiva el token en el servidor: solo para desarrollo local o instancias aisladas, nunca en el OptiPlex.
+
+### Puesta en marcha (en este orden)
+
+Los clientes primero y el servidor al final: un servidor sin token ignora la cabecera `Authorization`, así que el teléfono y la web nuevos funcionan contra el servidor viejo, y nada queda cortado entre pasos.
+
+1. **Access** (acción humana en Zero Trust): crear la aplicación *self-hosted* para el hostname de Pages, con política *Allow* por email (login Google). Si se quiere que los previews `<hash>.<proyecto>.pages.dev` también pidan login, agregar ese comodín a la aplicación; si no, la Function igual los rechaza con 403. Anotar el dominio del equipo y el AUD.
+2. **Pages:** cargar `API_TOKEN`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` y, si se quiere, `ACCESS_ALLOWED_EMAIL`; luego `cd web && VITE_API_BASE= npm run build` y `wrangler pages deploy web/dist --project-name <proyecto>`. Desde aquí la consola solo responde con sesión de Access válida.
+3. **Teléfono:** agregar `cauceApiToken=<token>` a `~/.gradle/gradle.properties`, `just apk` e instalar el APK.
+4. **Servidor:** agregar `CAUCE_API_TOKEN=<token>` a `server/.env` y `just up`. El log de arranque dice `auth: bearer token required on every route except GET /healthz`.
+
+### Verificar
+
+- `curl -s -o /dev/null -w '%{http_code}\n' 'https://<origen-publico>/sync/pull?since=0'` → `401`.
+- `curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $(sed -n 's/^CAUCE_API_TOKEN=//p' server/.env)" 'http://127.0.0.1:8080/sync/pull?since=0'` → `200` (lee el token sin imprimirlo).
+- `curl -s -o /dev/null -w '%{http_code}\n' https://<origen-publico>/healthz` → `200` sin cabecera.
+- Pages sin sesión de Access: `curl -s -o /dev/null -w '%{http_code}\n' https://<hash>.<proyecto>.pages.dev/api/projections/alarmas/alarmas_activas` → `403` (o `302` al login si Access cubre ese hostname). En el navegador, con sesión, la consola carga.
+- Teléfono: tocar Sincronizar o abrir la app; Home **no** muestra «Sin sincronizar: el servidor rechazó el token de la app (401)…».
+
+### Rotar el token
+
+Hay un solo token, así que rotar corta brevemente a los clientes que todavía tienen el viejo; la app es local-first y su outbox reenvía todo después, sin pérdida.
+
+1. Generar uno nuevo (`openssl rand -hex 32`).
+2. `API_TOKEN` en Pages y nuevo deploy.
+3. `CAUCE_API_TOKEN` en `server/.env` y `just up`. Desde aquí el APK viejo recibe 401 y lo muestra en Home.
+4. `cauceApiToken` en `~/.gradle/gradle.properties`, `just apk` e instalar.
+
+Si el token se filtró, hacer los pasos 2–4 de inmediato. Rotar el login humano (Access) no toca el token ni el teléfono.
 
 ## Restricciones
 

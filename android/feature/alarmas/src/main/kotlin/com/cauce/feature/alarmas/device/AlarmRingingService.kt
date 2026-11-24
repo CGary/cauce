@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.cauce.core.events.cauceServices
@@ -95,6 +96,7 @@ class AlarmRingingService : Service() {
         }
         set.start(key)
         startRinging()
+        openAlertScreen(key)
         timers.remove(key)?.cancel()
         timers[key] = scope.launch {
             delay(RING_MILLIS)
@@ -108,6 +110,23 @@ class AlarmRingingService : Service() {
             close(key)
         }
         observeLog()
+    }
+
+    /**
+     * SPEC §8: ColorOS on Android 16 does not launch the notification's full-screen intent, so
+     * the service opens the alarm screen itself. Holding "Mostrar sobre otras apps" is what lets
+     * a background app start an activity. A failure here never stops the sound.
+     */
+    private fun openAlertScreen(key: RingingKey) {
+        try {
+            if (!Settings.canDrawOverlays(this)) return
+            val intent = AlarmNotifications
+                .alertActivityLaunchIntent(this, key.alarmaId, key.programadaPara)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(AlarmasRuntime.TAG, "opening the alarm screen for ${key.alarmaId} failed", e)
+        }
     }
 
     private fun readNotification(intent: Intent, name: String): Notification? = try {

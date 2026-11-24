@@ -4,7 +4,7 @@
 |--------------|-------|
 | id           | `alarmas` |
 | estado       | `activo` |
-| versión spec | `9` |
+| versión spec | `10` |
 | superficies  | `android`, `web` |
 
 ## 1. Problema
@@ -94,11 +94,12 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
   - `USE_EXACT_ALARM` — Android 13+: las dosis no pueden correrse 15 min por ahorro de batería.
   - `POST_NOTIFICATIONS` — Android 13+.
   - `USE_FULL_SCREEN_INTENT` — mostrar sobre pantalla bloqueada (2.3).
+  - `SYSTEM_ALERT_WINDOW` («Mostrar sobre otras apps», se concede en Ajustes) — el servicio que hace sonar la alarma abre él mismo la pantalla de alarma, porque Android permite iniciar actividades desde segundo plano a las apps que lo tienen (§8). La lista de alarmas muestra una tarjeta mientras falte.
   - `FOREGROUND_SERVICE` — el servicio que hace sonar la alarma.
   - `FOREGROUND_SERVICE_SYSTEM_EXEMPTED` — tipo `systemExempted`, previsto para apps con alarmas exactas que siguen sonando en segundo plano.
   - `WAKE_LOCK` — la CPU no duerme mientras suena.
   - `RECEIVE_BOOT_COMPLETED` — 2.7.
-- **Requisitos del teléfono (ColorOS):** sin ellos el sistema puede cerrar la app a la fuerza y se pierden las alarmas programadas, o bloquear la pantalla completa. En Ajustes → Apps → Cauce: batería «Sin restricciones», inicio automático activado, ventanas emergentes / mostrar sobre otras apps permitido, mostrar en pantalla de bloqueo permitido, y en Notificaciones → Alarmas la pantalla completa permitida. No tienen API pública: la lista de alarmas solo muestra un texto que lo recuerda.
+- **Requisitos del teléfono (ColorOS):** sin ellos el sistema puede cerrar la app a la fuerza y se pierden las alarmas programadas, o bloquear la pantalla completa. En Ajustes → Apps → Cauce: batería «Sin restricciones», inicio automático activado, «Aparecer sobre otras aplicaciones» permitido y, en Aplicaciones → Acceso de aplicación especial, «Mostrar ventanas emergentes en segundo plano» permitido (sin este último ColorOS bloquea que el servicio abra la pantalla de alarma: verificado 2026-11-24 en el teléfono del dueño), mostrar en pantalla de bloqueo permitido, y en Notificaciones → Alarmas la pantalla completa permitida. No tienen API pública: la lista de alarmas solo muestra un texto que lo recuerda.
 - **Widget:** ninguno en v1.
 
 ### Server
@@ -220,6 +221,7 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) Las alarmas que no son `remedio` siguen editándose como antes (se reanclan en el próximo disparo, reglas de arriba): su historial no alimenta P2.
 - (agente) Límite conocido: un `remedio` editado antes de v9 ya tiene el ancla movida en su último `alarma_modificada`; no se repara. Su adherencia sigue contando desde ese ancla.
 - (agente) Las validaciones de fecha pasada y de «Hasta» del formulario web no aplican a la corrección de un `remedio`: su calendario no se edita, y una alarma con `fecha` de inicio ya pasada tiene que poder corregirse.
+- (agente) v10, pantalla de alarma en ColorOS/Android 16 (Realme RMX5070, verificado en el teléfono el 2026-11-24): el servicio suena y vibra y la notificación lleva `fullScreenIntent` con el permiso concedido, pero el sistema nunca abre la pantalla de alarma (la pantalla sigue apagada y solo aparece la notificación chica del bloqueo). Por eso, cuando «Mostrar sobre otras apps» (`SYSTEM_ALERT_WINDOW`) está concedido, el servicio también abre la pantalla de alarma él mismo al empezar a sonar cada disparo; un fallo al abrirla se registra y no corta el sonido. El `fullScreenIntent` se mantiene para otros teléfonos. Si suena un segundo disparo con la pantalla abierta, la pantalla pasa a mostrar el más nuevo (y se cierra cuando ese disparo se atiende). El permiso se pide solo con una tarjeta en la lista de alarmas, sin diálogos.
 
 ## 9. Changelog
 
@@ -232,3 +234,4 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - `v7` — 2026-10-30 — UX Android sin cambios de eventos, proyecciones ni fixtures: lista con alarmas propias primero y reuniones de Google plegables con cuenta, inicio y aviso, «Nueva alarma» en la barra, recordatorio de ColorOS descartable, pantallas Adherencia e Historial por día, e inicio con tarjetas y «Último evento».
 - `v8` — 2026-11-19 — Android sin cambios de eventos, proyecciones ni fixtures: el disparo arma timeout y próximo disparo antes de sonar, fallos del servicio de alarma registrados y con respaldo audible (canal «Alarmas (respaldo)», insistente), reprogramaciones serializadas y reprogramación tras actualizar el APK (§5, §8); web: validaciones del formulario y la carga en bloque (fechas pasadas, «Hasta» antes del inicio, topes de `count`/`interval`), intervalo que se envía igual al visible y resumen con «quedan N» (§8).
 - `v9` — 2026-11-19 — decisión del dueño: una alarma `remedio` solo se corrige (título, remedio, destinatario); su calendario no se edita y el `alarma_modificada` lo reenvía tal cual, así que la adherencia (P2) y `restantes` (P1) no cambian (2.2). P1 agrega `fecha?` a cada fila (aditivo). Fixtures nuevos: P1 `caso_13`, P2 `caso_06`; `caso_12` trae `fecha` en sus filas.
+- `v10` — 2026-11-24 — Android sin cambios de eventos, proyecciones ni fixtures: con «Mostrar sobre otras apps» (`SYSTEM_ALERT_WINDOW`) concedido, el servicio de alarma abre la pantalla de alarma él mismo, porque ColorOS/Android 16 no lanza el `fullScreenIntent`; la pantalla muestra el disparo más nuevo y la lista pide el permiso con una tarjeta (§5, §8).

@@ -1,5 +1,6 @@
 package com.cauce.feature.alarmas.device
 
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,7 +16,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,13 +40,15 @@ import kotlinx.coroutines.launch
  */
 class AlarmAlertActivity : ComponentActivity() {
 
+    /** The firing on screen; `singleTop` + [onNewIntent] swap it for the newest one. */
+    private var firing by mutableStateOf<Pair<String, String>?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         showOverLockScreen()
 
-        val alarmaId = intent.getStringExtra(AlarmReceiver.EXTRA_ALARMA_ID)
-        val programadaPara = intent.getStringExtra(AlarmReceiver.EXTRA_PROGRAMADA_PARA)
-        if (alarmaId == null || programadaPara == null) {
+        firing = firingOf(intent)
+        if (firing == null) {
             finish()
             return
         }
@@ -50,14 +56,32 @@ class AlarmAlertActivity : ComponentActivity() {
         setContent {
             CauceTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    AlarmAlertScreen(
-                        alarmaId = alarmaId,
-                        programadaPara = programadaPara,
-                        onDone = { finish() },
-                    )
+                    val current = firing
+                    if (current != null) {
+                        key(current) {
+                            AlarmAlertScreen(
+                                alarmaId = current.first,
+                                programadaPara = current.second,
+                                onDone = { finish() },
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val newest = firingOf(intent) ?: return
+        setIntent(intent)
+        firing = newest
+    }
+
+    private fun firingOf(intent: Intent?): Pair<String, String>? {
+        val alarmaId = intent?.getStringExtra(AlarmReceiver.EXTRA_ALARMA_ID) ?: return null
+        val programadaPara = intent.getStringExtra(AlarmReceiver.EXTRA_PROGRAMADA_PARA) ?: return null
+        return alarmaId to programadaPara
     }
 
     private fun showOverLockScreen() {

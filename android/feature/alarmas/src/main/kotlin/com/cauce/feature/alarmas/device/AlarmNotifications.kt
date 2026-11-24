@@ -163,14 +163,23 @@ internal object AlarmNotifications {
         )
     }
 
+    /**
+     * The alarm screen for one firing: the notification's full-screen intent and the ringing
+     * service's direct start (when "Mostrar sobre otras apps" is granted) both open it.
+     */
+    internal fun alertActivityLaunchIntent(
+        context: Context,
+        alarmaId: String,
+        programadaPara: String,
+    ): Intent = Intent(context, AlarmAlertActivity::class.java)
+        .putExtra(AlarmReceiver.EXTRA_ALARMA_ID, alarmaId)
+        .putExtra(AlarmReceiver.EXTRA_PROGRAMADA_PARA, programadaPara)
+
     private fun alertActivityIntent(context: Context, alarmaId: String, programadaPara: String): PendingIntent {
-        val intent = Intent(context, AlarmAlertActivity::class.java)
-            .putExtra(AlarmReceiver.EXTRA_ALARMA_ID, alarmaId)
-            .putExtra(AlarmReceiver.EXTRA_PROGRAMADA_PARA, programadaPara)
         return PendingIntent.getActivity(
             context,
             "alert:$alarmaId".hashCode(),
-            intent,
+            alertActivityLaunchIntent(context, alarmaId, programadaPara),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }

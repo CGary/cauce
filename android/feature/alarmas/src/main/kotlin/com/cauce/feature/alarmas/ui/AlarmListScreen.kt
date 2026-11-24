@@ -224,8 +224,8 @@ private fun RequestPostNotifications() {
 }
 
 /**
- * SPEC §5: exact alarms (Android 12+) and full-screen intents (Android 14+) are granted in
- * Settings, not with a runtime dialog. Prompt from the list, re-check on resume, and let the
+ * SPEC §5: exact alarms (Android 12+), full-screen intents (Android 14+) and "Mostrar sobre
+ * otras apps" are granted in Settings, not with a runtime dialog. Prompt from the list, re-check on resume, and let the
  * manifest's `SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED` receiver reschedule.
  */
 @Composable
@@ -234,12 +234,14 @@ private fun RequestAlarmPermissions() {
     val lifecycleOwner = LocalLifecycleOwner.current
     var canExact by remember { mutableStateOf(canScheduleExactAlarms(context)) }
     var canFullScreen by remember { mutableStateOf(canUseFullScreenIntent(context)) }
+    var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 canExact = canScheduleExactAlarms(context)
                 canFullScreen = canUseFullScreenIntent(context)
+                canOverlay = Settings.canDrawOverlays(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -272,6 +274,21 @@ private fun RequestAlarmPermissions() {
             },
         )
     }
+    // SPEC §8: on ColorOS the ringing service opens the alarm screen itself, which needs this.
+    if (!canOverlay) {
+        PermissionCard(
+            title = "Mostrar sobre otras apps",
+            message = "Para que la alarma ocupe la pantalla como el reloj, permite " +
+                "\"Mostrar sobre otras apps\".",
+            action = "Permitir",
+            onOpen = {
+                openSettings(
+                    context,
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri(context)),
+                )
+            },
+        )
+    }
 }
 
 /**
@@ -295,8 +312,9 @@ private fun ColorOsReminderCard() {
     Card {
         Text("Requisitos del teléfono (ColorOS)", style = MaterialTheme.typography.titleSmall)
         Text(
-            text = "Activa inicio automático, ventanas emergentes, pantalla de bloqueo y " +
-                "batería sin restricciones.",
+            text = "Activa inicio automático, «Mostrar ventanas emergentes en segundo plano» " +
+                "(Ajustes → Aplicaciones → Acceso especial), pantalla de bloqueo y batería " +
+                "sin restricciones. Sin las ventanas emergentes, la alarma suena pero no ocupa la pantalla.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

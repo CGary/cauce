@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Full screen over the lock screen while the phone rings (2.3). -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- Lets the ringing service open the alarm screen itself: background activity starts are
+         allowed for apps holding it (ColorOS ignores the full-screen intent, SPEC §8). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Foreground service that plays the alarm (USAGE_ALARM), type systemExempted. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
@@ -26,6 +29,7 @@
         <activity
             android:name=".device.AlarmAlertActivity"
             android:exported="false"
+            android:launchMode="singleTop"
             android:showWhenLocked="true"
             android:turnScreenOn="true" />
 

@@ -15,6 +15,10 @@ sync-schemas:
 test-server:
     cd server && go test ./...
 
+# Compila cauce-cli (D21) en ~/.local/bin; config y token en ~/.config/cauce-cli/
+cli-install:
+    cd server && go build -o ~/.local/bin/cauce-cli ./cmd/cauce-cli
+
 test-android:
     cd android && ./gradlew --quiet :core:events:test :core:sync:test :feature:alarmas:test
 

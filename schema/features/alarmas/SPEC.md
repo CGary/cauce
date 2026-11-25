@@ -4,7 +4,7 @@
 |--------------|-------|
 | id           | `alarmas` |
 | estado       | `activo` |
-| versión spec | `10` |
+| versión spec | `11` |
 | superficies  | `android`, `web` |
 
 ## 1. Problema
@@ -30,11 +30,11 @@ Las alarmas del reloj del teléfono no saben *para qué* suenan: no registran si
 
 | Tipo | v | Productor | Campos (además de `id`, `user_id`, `ts`, `device_id`) |
 |------|---|-----------|-------------------------------------------------------|
-| `alarma_creada` | 3 | app, web | como v2 más `fecha: "AAAA-MM-DD"?` (fecha local del primer disparo; §4). v3 es la versión que se produce desde la spec v5; v2 se sigue leyendo. |
+| `alarma_creada` | 3 | app, web, cli | como v2 más `fecha: "AAAA-MM-DD"?` (fecha local del primer disparo; §4). v3 es la versión que se produce desde la spec v5; v2 se sigue leyendo. |
 | `alarma_creada` | 2 | app, web | `alarma_id: uuid`, `titulo: string`, `tipo: enum`, `hora: "HH:MM"`, `repeticion: null (una vez) o RRULE { freq: DAILY\|WEEKLY\|MONTHLY\|HOURLY, interval?, byday? (WEEKLY: MO..SU; MONTHLY: un solo valor con ordinal, 1MO..5SU o -1MO..-1SU), bymonthday? (solo MONTHLY: 1..31 o -1; excluyente con byday), count? o until? }`, `destinatario: string?`, `remedio: string?` |
-| `alarma_modificada` | 3 | app, web | como v2 más `fecha?` (estado completo) |
+| `alarma_modificada` | 3 | app, web, cli | como v2 más `fecha?` (estado completo) |
 | `alarma_modificada` | 2 | app, web | `alarma_id`, mismos campos que `alarma_creada` (estado completo, no diff) |
-| `alarma_desactivada` | 1 | app, web | `alarma_id`, `motivo: enum(usuario, fin_tratamiento, una_vez_atendida)` |
+| `alarma_desactivada` | 1 | app, web, cli | `alarma_id`, `motivo: enum(usuario, fin_tratamiento, una_vez_atendida)` |
 | `alarma_disparada` | 1 | app | `alarma_id`, `programada_para: datetime` |
 | `alarma_atendida` | 1 | app | `alarma_id`, `programada_para: datetime`, `accion: enum(hecho, pospuesta, ignorada)`, `pospuesta_n: int(1..3)?` |
 | `dosis_dada` | 1 | app | `alarma_id`, `destinatario`, `remedio`, `programada_para: datetime` |
@@ -223,6 +223,8 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - (agente) Las validaciones de fecha pasada y de «Hasta» del formulario web no aplican a la corrección de un `remedio`: su calendario no se edita, y una alarma con `fecha` de inicio ya pasada tiene que poder corregirse.
 - (agente) v10, pantalla de alarma en ColorOS/Android 16 (Realme RMX5070, verificado en el teléfono el 2026-11-24): el servicio suena y vibra y la notificación lleva `fullScreenIntent` con el permiso concedido, pero el sistema nunca abre la pantalla de alarma (la pantalla sigue apagada y solo aparece la notificación chica del bloqueo). Por eso, cuando «Mostrar sobre otras apps» (`SYSTEM_ALERT_WINDOW`) está concedido, el servicio también abre la pantalla de alarma él mismo al empezar a sonar cada disparo; un fallo al abrirla se registra y no corta el sonido. El `fullScreenIntent` se mantiene para otros teléfonos. Si suena un segundo disparo con la pantalla abierta, la pantalla pasa a mostrar el más nuevo (y se cierra cuando ese disparo se atiende). El permiso se pide solo con una tarjeta en la lista de alarmas, sin diálogos.
 
+- (agente) v11, `cauce-cli` (D21) es un productor más, con `device_id: "cli"` y por el mismo `POST /sync/push` que la web: crea (`alarma_creada` v3), edita (`alarma_modificada` v3, estado completo) y desactiva (`alarma_desactivada`, `motivo: usuario`), y carga en bloque el formato `cauce.alarmas` v1 de §5 en un solo push. Aplica las mismas reglas que el formulario web: un `remedio` solo se corrige (2.2), una edición de otro tipo se reancla en el próximo disparo con `restantes` como `count`, y valida topes, fecha pasada y «Hasta» antes de enviar. Las entradas `gcal:` no se editan ni se desactivan desde la CLI (2.10). No produce `alarma_disparada`, `alarma_atendida` ni `dosis_dada`: son del teléfono.
+
 ## 9. Changelog
 
 - `v1` — 2026-10-22 — creación. Fixtures iniciales escritos a mano junto con los schemas.
@@ -235,3 +237,4 @@ Todo resto de RRULE (`YEARLY`, `BYHOUR`, `BYSETPOS`, `EXDATE`, varios valores en
 - `v8` — 2026-11-19 — Android sin cambios de eventos, proyecciones ni fixtures: el disparo arma timeout y próximo disparo antes de sonar, fallos del servicio de alarma registrados y con respaldo audible (canal «Alarmas (respaldo)», insistente), reprogramaciones serializadas y reprogramación tras actualizar el APK (§5, §8); web: validaciones del formulario y la carga en bloque (fechas pasadas, «Hasta» antes del inicio, topes de `count`/`interval`), intervalo que se envía igual al visible y resumen con «quedan N» (§8).
 - `v9` — 2026-11-19 — decisión del dueño: una alarma `remedio` solo se corrige (título, remedio, destinatario); su calendario no se edita y el `alarma_modificada` lo reenvía tal cual, así que la adherencia (P2) y `restantes` (P1) no cambian (2.2). P1 agrega `fecha?` a cada fila (aditivo). Fixtures nuevos: P1 `caso_13`, P2 `caso_06`; `caso_12` trae `fecha` en sus filas.
 - `v10` — 2026-11-24 — Android sin cambios de eventos, proyecciones ni fixtures: con «Mostrar sobre otras apps» (`SYSTEM_ALERT_WINDOW`) concedido, el servicio de alarma abre la pantalla de alarma él mismo, porque ColorOS/Android 16 no lanza el `fullScreenIntent`; la pantalla muestra el disparo más nuevo y la lista pide el permiso con una tarjeta (§5, §8).
+- `v11` — 2026-11-24 — `cauce-cli` (D21) se suma como productor de `alarma_creada` v3, `alarma_modificada` v3 y `alarma_desactivada` v1, con `device_id: "cli"` y las mismas reglas que la web (§8). Sin cambios de eventos, proyecciones ni fixtures.

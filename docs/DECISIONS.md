@@ -119,3 +119,20 @@ Decisión: dos cerrojos independientes.
 Cómo refina D9: el token compartido es el «service token» de D9 y D11, pero lo valida el propio servidor, no Access, así que el servidor deja de confiar en la red. `auth.UserFromRequest` sigue siendo la única costura de identidad: pasar el token prueba que quien llama es un cliente del dueño, y la identidad sigue siendo `CAUCE_USER_ID`. El login humano vive solo en el borde (la Function); cambiar Google/Access por otro proveedor es un cambio de `web/functions/` y no toca servidor ni teléfono.
 
 Consecuencias: un token para todos los clientes, así que rotarlo exige actualizar a la vez `server/.env`, el APK y el secreto de Pages (procedimiento en `docs/DEPLOY-OPTIPLEX.md`, «Autenticación»). El token queda dentro del APK (como la URL de D15): quien tenga el APK lo tiene. Con un solo usuario es aceptable; si no, la salida es un token por cliente en el mismo middleware.
+
+## D21 — `cauce-cli`: un cliente de terminal para agentes, en Go, que escribe con `device_id: "cli"` — 2026-11-24
+
+Contexto: los agentes (Claude u otros) solo podían tocar alarmas abriendo la web o leyendo la base a mano. Hace falta una interfaz estable para que un agente vea, cree, edite y desactive alarmas, avisos de reuniones y adherencia sin saltarse las reglas del contrato. El diseño está en `docs/PLAN-CLI.md` y sigue `docs/GUIA-CLI-AGENTES.md`.
+
+Decisión (las seis del plan, aprobadas por el dueño):
+
+1. **Nombre:** el binario se llama `cauce-cli`; `cauce` ya es el servidor.
+2. **Lenguaje y lugar:** Go, en `server/cmd/cauce-cli/` y `server/internal/cli/`, dentro del mismo módulo del servidor. Reusa el validador de schemas (`internal/core/event`) y valida cada evento antes de enviarlo. Es código de la CLI, no de ningún feature (tabla de propiedad de `AGENTS.md`); importa los paquetes compartidos y no los modifica.
+3. **`device_id`:** `"cli"`. El servidor no restringe el valor y el historial distingue qué vino de un agente.
+4. **Regla del remedio:** la aplica la CLI, igual que el formulario web (`isScheduleLocked`, `remedioCorrectionPayload` en `web/src/features/alarmas/model.ts`): editar un `remedio` solo corrige título, remedio y destinatario; cualquier otro cambio falla con `REMEDIO_SCHEDULE_LOCKED`. El servidor no cambia: el push valida cada evento por separado, sin historial, y rechazar ahí exigiría leer estado dentro de `sync` (código compartido) y podría atascar la cola del teléfono, que sube todo en un solo lote.
+5. **Token:** el mismo token de D20, leído solo de `~/.config/cauce-cli/token` (o `--token-file`), nunca de un flag ni de una variable de entorno. La CLI rechaza un archivo legible por otros usuarios y nunca imprime el token, ni con `--debug`. El modo 600 protege de otros usuarios del sistema, no del agente que corre con el mismo usuario: frente al agente, la protección es que la CLI no lo muestra y la skill prohíbe leer el archivo.
+6. **Desactivar:** exige `--apply --yes`, porque no hay «reactivar»: para volver atrás hay que crear otra alarma.
+
+La CLI es un cliente más, como la web: lee `GET /api/projections/<feature>/<name>` y escribe con `POST /sync/push`. Las escrituras exigen `--dry-run` (guarda un plan en `~/.local/state/cauce-cli/plans/`, vence a las 24 h) o `--apply`. El `ts` se pone al aplicar, no al planificar, y el plan guarda el `id` del evento: aplicarlo dos veces manda el mismo `id` y el servidor lo deduplica. Un plan de edición vuelve a leer la alarma al aplicarse y falla con `CONFLICT` si cambió desde el teléfono o la web.
+
+Consecuencias: `alarmas` y `calendario_google` listan `cli` como productor de los eventos que escribe (`alarma_creada`, `alarma_modificada`, `alarma_desactivada`, `aviso_reunion_editado`). Rotar el token de D20 ahora incluye también el archivo de la CLI (`docs/DEPLOY-OPTIPLEX.md`, «Rotar el token»). Las reglas de validación que el schema no expresa (topes de `count` e `interval`, fecha pasada, `until` antes del inicio, reanclaje de una edición en el próximo disparo) quedan duplicadas en la web, la app y la CLI; si cambian en el SPEC, cambian en las tres.

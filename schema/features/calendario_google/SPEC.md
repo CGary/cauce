@@ -4,7 +4,7 @@
 |--------------|-------|
 | id           | `calendario_google` |
 | estado       | `activo` |
-| versión spec | `2` |
+| versión spec | `3` |
 | superficies  | `android`, `web` |
 
 ## 1. Problema
@@ -30,7 +30,7 @@ Tengo reuniones repartidas en varias cuentas de Google, y cada una avisa por su 
 |------|---|-----------|-------------------------------------------------------|
 | `reunion_sincronizada` | 1 | app | `reunion_id: string` (estable por ocurrencia), `serie_id: string` (igual para todas las ocurrencias de la misma reunión repetida; en una reunión única, igual a su propio id), `cuenta: string` (la cuenta de Google tal como la muestra el teléfono), `calendario: string?`, `titulo: string`, `inicio: datetime`, `fin: datetime`, `todo_el_dia: bool`, `recordatorio_min: int \| null` (el recordatorio más temprano de Google, en minutos antes del inicio; `null` si no tiene), `estado: enum(confirmada, cancelada)`, `respuesta: enum(aceptada, tentativa, rechazada, sin_respuesta)`. Estado completo: gana el último `ts`. |
 | `reunion_eliminada_en_origen` | 1 | app | `reunion_id` |
-| `aviso_reunion_editado` | 1 | app, web | `serie_id`, y exactamente uno de: `minutos_antes: int (≥ 0)` para reuniones con hora, `hora: "HH:MM"` para reuniones de todo el día, `apagado: true`. Estado completo del aviso: gana el último `ts`. |
+| `aviso_reunion_editado` | 1 | app, web, cli | `serie_id`, y exactamente uno de: `minutos_antes: int (≥ 0)` para reuniones con hora, `hora: "HH:MM"` para reuniones de todo el día, `apagado: true`. Estado completo del aviso: gana el último `ts`. |
 
 ### Eventos consumidos de otros features
 
@@ -111,8 +111,10 @@ Convenciones: todo `datetime` es RFC 3339 en UTC (`...Z`). La zona local entra c
 - (agente) Mi respuesta se lee de `SELF_ATTENDEE_STATUS` del proveedor (derivada de mi asistente en `Attendees`); `ATTENDEE_RELATIONSHIP` no tiene un valor "yo" en Android.
 - (agente) Consola web: el estado vacío de «Reuniones próximas» muestra la hora de la última lectura de la proyección, para distinguir «sin reuniones» de «datos viejos»; tras guardar un aviso avisa que el teléfono lo aplica en su próximo pull.
 - (agente) Consola web: «Minutos antes» acepta de 0 a 40320 (4 semanas); un valor mayor o que no es un entero seguro es un error en línea y no se empuja, porque un entero enorme rompe las proyecciones del servidor. El schema no cambia.
+- (agente) v3, `cauce-cli` (D21) edita el aviso de una serie igual que la web (`aviso_reunion_editado`, `device_id: "cli"`, por `POST /sync/push`), con el mismo tope de 40320 en `minutos_antes`. Solo acepta `serie_id` que aparezcan en P1. No crea ni elimina reuniones.
 
 ## 9. Changelog
 
 - `v1` — 2026-10-28 — creación. Reuniones de todas las cuentas de Google del teléfono, vía calendario de Android; aviso heredado de Google y editable por serie; `alarmas` consume los eventos para sonar. Fixtures iniciales escritos junto con los schemas.
 - `v2` — 2026-11-19 — web sin cambios de eventos, proyecciones ni fixtures: `minutos_antes` del aviso editado tiene tope de 40320 (4 semanas) en el formulario (§8).
+- `v3` — 2026-11-24 — `cauce-cli` (D21) se suma como productor de `aviso_reunion_editado` v1, con `device_id: "cli"` (§8). Sin cambios de eventos, proyecciones ni fixtures.

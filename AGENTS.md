@@ -27,6 +27,9 @@ The spec describes the **desired state**, never a change request. Your job is to
 | Android | `android/feature/<id>/**` |
 | Server | `server/internal/<id>/**` |
 | Web | `web/src/features/<id>/**` |
+| CLI (no feature) | `server/cmd/cauce-cli/**`, `server/internal/cli/**` |
+
+The CLI row is not a feature surface: `cauce-cli` (D21) is one more client of the API, like the web. Change it only when the task is about the CLI; it imports `server/internal/core/event` (and, in its tests, the server stack) but never modifies them.
 
 Shared code (`android/core/**`, `server/internal/core/**`, `server/internal/sync/**`, `web/src/core/**`) is **not** owned by any feature. Change it only when the task is explicitly about the core, and say so in your summary. If a feature seems to need a core change, stop and ask; the usual answer is that the feature should do it locally.
 

@@ -73,6 +73,7 @@ Dos cerrojos independientes (D20 en `DECISIONS.md`): el servidor exige un token 
 | `CAUCE_API_TOKEN` | `server/.env` del servidor (modo 600) | el token; mínimo 32 caracteres. Sin él el servidor no arranca |
 | `cauceApiToken` | `~/.gradle/gradle.properties` de la máquina que compila el APK | el mismo token (queda dentro del APK) |
 | `API_TOKEN` | secreto del proyecto de Pages | el mismo token |
+| `~/.config/cauce-cli/token` | máquina donde corre `cauce-cli` (modo 600; D21) | el mismo token, solo él, en una línea |
 | `ACCESS_TEAM_DOMAIN` | secreto del proyecto de Pages | `<equipo>.cloudflareaccess.com` |
 | `ACCESS_AUD` | secreto del proyecto de Pages | el *Application Audience (AUD) Tag* de la aplicación de Access |
 | `ACCESS_ALLOWED_EMAIL` | secreto del proyecto de Pages (opcional) | el email del dueño; si está, el JWT debe traer ese email |
@@ -105,8 +106,9 @@ Hay un solo token, así que rotar corta brevemente a los clientes que todavía t
 2. `API_TOKEN` en Pages y nuevo deploy.
 3. `CAUCE_API_TOKEN` en `server/.env` y `just up`. Desde aquí el APK viejo recibe 401 y lo muestra en Home.
 4. `cauceApiToken` en `~/.gradle/gradle.properties`, `just apk` e instalar.
+5. `~/.config/cauce-cli/token` en cada máquina que use `cauce-cli` (D21), sin pasar el token por la línea de comandos: `umask 077 && cat > ~/.config/cauce-cli/token` (pegar y Ctrl-D) y `chmod 600 ~/.config/cauce-cli/token`. Verificar con `cauce-cli server health --json`; con el token viejo responde `PERMISSION_DENIED`.
 
-Si el token se filtró, hacer los pasos 2–4 de inmediato. Rotar el login humano (Access) no toca el token ni el teléfono.
+Si el token se filtró, hacer los pasos 2–5 de inmediato. Rotar el login humano (Access) no toca el token ni el teléfono.
 
 ## Restricciones
 

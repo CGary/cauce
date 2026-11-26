@@ -19,15 +19,6 @@ class UiLogicTest {
     }
 
     @Test
-    fun `relativeAgo cubre nunca minutos horas y dias`() {
-        assertEquals("nunca", relativeAgo(now, null))
-        assertEquals("hace un momento", relativeAgo(now, now.minusSeconds(20)))
-        assertEquals("hace 5 min", relativeAgo(now, now.minusSeconds(5 * 60)))
-        assertEquals("hace 3 h", relativeAgo(now, now.minusSeconds(3 * 3600 + 10)))
-        assertEquals("hace 2 d", relativeAgo(now, now.minusSeconds(2 * 86400)))
-    }
-
-    @Test
     fun `gcalHeadline muestra inicio y aviso`() {
         val inicio = Instant.parse("2026-10-30T17:00:00Z")
         val aviso = Instant.parse("2026-10-30T16:50:00Z")

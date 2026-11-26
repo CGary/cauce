@@ -105,7 +105,6 @@ fun AlarmListScreen(
             }
         },
     ) {
-        SyncStatusText()
         RequestAlarmPermissions()
         ColorOsReminderCard()
         if (propias.isEmpty()) {

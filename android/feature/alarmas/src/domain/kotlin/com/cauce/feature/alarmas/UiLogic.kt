@@ -1,29 +1,11 @@
 package com.cauce.feature.alarmas
 
-import com.cauce.core.events.Envelope
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 private val HM: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-
-/** "hace 5 min" / "nunca": the relative age of [then] as seen at [now]. */
-fun relativeAgo(now: Instant, then: Instant?): String {
-    if (then == null) return "nunca"
-    val minutes = Duration.between(then, now).toMinutes()
-    return when {
-        minutes < 1 -> "hace un momento"
-        minutes < 60 -> "hace $minutes min"
-        minutes < 60 * 24 -> "hace ${minutes / 60} h"
-        else -> "hace ${minutes / (60 * 24)} d"
-    }
-}
-
-/** The newest event `ts` in the local store: the proxy for "last sync" (core exposes none). */
-fun newestTs(events: List<Envelope>): Instant? =
-    events.maxOfOrNull { Instant.parse(it.ts) }
 
 /** Same wording as the Reuniones screen: "Reunión 17:00 · aviso 16:50". */
 internal fun gcalHeadline(inicio: Instant, todoElDia: Boolean, aviso: Instant, zone: ZoneId): String {

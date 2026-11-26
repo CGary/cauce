@@ -1,11 +1,8 @@
 package com.cauce.feature.alarmas.ui
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cauce.core.events.CauceJson
@@ -16,10 +13,8 @@ import com.cauce.feature.alarmas.HistorialDosis
 import com.cauce.feature.alarmas.adherenciaPercent
 import com.cauce.feature.alarmas.countNoun
 import com.cauce.feature.alarmas.device.AlarmasRuntime
-import com.cauce.feature.alarmas.newestTs
 import com.cauce.feature.alarmas.nextAlarmLabel
 import com.cauce.feature.alarmas.projectionParams
-import com.cauce.feature.alarmas.relativeAgo
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.time.Instant
@@ -69,23 +64,4 @@ fun rememberAlarmasHomeSummary(): AlarmasHomeSummary {
             },
         )
     }
-}
-
-/**
- * core exposes no last-sync timestamp (only the `server_seq` cursor), so the proxy is the
- * newest event `ts` in the local store, labeled as such (SPEC alarmas §8).
- */
-@Composable
-fun SyncStatusText(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val services = remember { context.cauceServices() }
-    val events by services.eventStore.observeAll()
-        .collectAsStateWithLifecycle(initialValue = emptyList())
-    val label = remember(events) { relativeAgo(Instant.now(), newestTs(events)) }
-    Text(
-        text = "Último evento: $label",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier,
-    )
 }

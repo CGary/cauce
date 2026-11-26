@@ -157,6 +157,17 @@ describe('Pages Function proxy', () => {
     expect(originCalls[0]?.headers.get('Cookie')).toBeNull()
   })
 
+  it('proxies GET /sync/devices like the other /sync routes', async () => {
+    const jwt = await makeJwt()
+    const res = await syncOnRequest({
+      request: request('/sync/devices', { 'Cf-Access-Jwt-Assertion': jwt }),
+      env: ENV,
+    })
+    expect(res.status).toBe(200)
+    expect(originCalls[0]?.url).toBe(`${ORIGIN}/sync/devices`)
+    expect(originCalls[0]?.headers.get('Authorization')).toBe(`Bearer ${API_TOKEN}`)
+  })
+
   it('caches the team keys between requests', async () => {
     const jwt = await makeJwt()
     for (let i = 0; i < 3; i++) {

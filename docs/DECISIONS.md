@@ -96,7 +96,7 @@ Contexto: `core` no expone la fecha de la última sincronización, solo el curso
 
 Decisión: Android muestra «Último evento: hace X» con el `ts` del evento local más reciente. La web muestra «Actualizado hace X» a partir de `dataUpdatedAt` de TanStack Query, y tras un push avisa que el teléfono lo aplica en su próximo pull.
 
-Consecuencias: limitación conocida: ninguno de los dos es la hora real de la última sincronización. Agregarla es un cambio de `core` para una tarea futura.
+Consecuencias: limitación conocida: ninguno de los dos es la hora real de la última sincronización. Agregarla es un cambio de `core` para una tarea futura. (Resuelta por D22.)
 
 ## D19 — Política de reintentos de consultas en la web — 2026-10-30
 
@@ -136,3 +136,19 @@ Decisión (las seis del plan, aprobadas por el dueño):
 La CLI es un cliente más, como la web: lee `GET /api/projections/<feature>/<name>` y escribe con `POST /sync/push`. Las escrituras exigen `--dry-run` (guarda un plan en `~/.local/state/cauce-cli/plans/`, vence a las 24 h) o `--apply`. El `ts` se pone al aplicar, no al planificar, y el plan guarda el `id` del evento: aplicarlo dos veces manda el mismo `id` y el servidor lo deduplica. Un plan de edición vuelve a leer la alarma al aplicarse y falla con `CONFLICT` si cambió desde el teléfono o la web.
 
 Consecuencias: `alarmas` y `calendario_google` listan `cli` como productor de los eventos que escribe (`alarma_creada`, `alarma_modificada`, `alarma_desactivada`, `aviso_reunion_editado`). Rotar el token de D20 ahora incluye también el archivo de la CLI (`docs/DEPLOY-OPTIPLEX.md`, «Rotar el token»). Las reglas de validación que el schema no expresa (topes de `count` e `interval`, fecha pasada, `until` antes del inicio, reanclaje de una edición en el próximo disparo) quedan duplicadas en la web, la app y la CLI; si cambian en el SPEC, cambian en las tres.
+
+## D22 — Sync visible: el servidor anota cuándo sincronizó cada dispositivo — 2026-11-26
+
+Contexto: D18 dejó como limitación conocida que ni la app ni la web muestran la hora real de la última sincronización, y nadie (web, CLI) puede saber si un cambio ya llegó al teléfono. Hace falta para confiar en una alarma o un remedio creado desde la web o la CLI.
+
+Decisión (cambio de `core` aprobado por el dueño: `server/internal/sync/**`, `server/internal/core/store`, migraciones y el cableado de `server/cmd/cauce`):
+
+1. **`GET /sync/pull` acepta `device_id` opcional** (1..64 caracteres, la misma regla del sobre; inválido = 400). Si viene y el pull sale bien, el servidor anota `last_pull_at` = ahora (UTC) y `pulled_through_seq` = el `next_since` que devuelve. Sin `device_id`, el comportamiento es el de antes y no se anota nada: un teléfono con una versión vieja sigue funcionando.
+2. **`POST /sync/push` anota `last_push_at`** para cada `device_id` distinto del lote, en la misma transacción que el insert, y suma el campo aditivo `server_seq`: el mayor `server_seq` del log del usuario tras insertar. Todo evento empujado, nuevo o duplicado, queda ≤ a él. `accepted` y `duplicates` no cambian. Un lote rechazado no anota nada.
+3. **`GET /sync/devices`** (con token, como toda ruta salvo `/healthz`) devuelve `{now, server_seq, devices: [{device_id, last_push_at, last_pull_at, pulled_through_seq}]}`, ordenado por `device_id`, solo del usuario de la petición, horas RFC 3339 UTC con `Z` y `null` = nunca.
+4. **Almacenamiento:** migración aditiva `0002_device_sync.sql`, tabla `device_sync(user_id, device_id, last_push_at, last_pull_at, pulled_through_seq)` con clave `(user_id, device_id)`. Es contabilidad operativa: no es un evento ni una proyección (D7 intacto) y el log no cambia. Consultas con sqlc, como el resto del store.
+5. **«Recibido»:** un cambio llegó al dispositivo D cuando `D.pulled_through_seq >= server_seq` devuelto por el push que lo mandó. «El teléfono» es todo dispositivo cuyo id no es `web` ni `cli`.
+
+Uso: el teléfono manda su `device_id` en el pull y la app muestra el estado de sus intentos de sync; la web muestra una tarjeta «Teléfono» y, tras un push, «el teléfono aún no lo recibe» hasta que lo tenga; la CLI agrega `server devices` y cada escritura con `--apply` devuelve `data.server_seq` y `data.phone_received` (una lectura de `/sync/devices` justo después del push).
+
+Consecuencias: reemplaza la limitación de D18. `pulled_through_seq` es el `next_since` de la última página pedida, así que un teléfono a mitad de una paginación o que reinicia su cursor en 0 aparece atrasado hasta terminar de bajar; es lo correcto. Un teléfono que todavía no manda `device_id` no aparece en `/sync/devices` (solo con `last_push_at` si empujó algo), y la CLI y la web lo muestran como «no recibido». El reloj es el del servidor, no el del dispositivo.

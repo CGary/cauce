@@ -408,7 +408,7 @@ export default function ActivasView() {
               className="rounded-control border border-success bg-success-soft px-4 py-3 font-medium text-success-ink"
             >
               <span aria-hidden="true">✓ </span>
-              {importResult.ok} El teléfono lo aplica en su próximo pull.
+              {importResult.ok}
             </p>
           )}
           {importResult && importResult.errors.length > 0 && (
@@ -456,7 +456,7 @@ export default function ActivasView() {
         {notice && (
           <p className="rounded-control border border-success bg-success-soft px-4 py-3 font-medium text-success-ink">
             <span aria-hidden="true">✓ </span>
-            {notice} El teléfono lo aplica en su próximo pull.
+            {notice}
           </p>
         )}
       </div>

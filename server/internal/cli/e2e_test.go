@@ -77,9 +77,11 @@ func newHarness(t *testing.T) *harness {
 	registry.MustRegister(alarmas.Projections()...)
 	registry.MustRegister(calendario_google.Projections()...)
 	clock := &fakeClock{t: time.Date(2026, 11, 24, 13, 0, 0, 0, time.UTC)}
-	pusher := &syncapi.Pusher{Store: st, Validator: validator}
+	pusher := &syncapi.Pusher{Store: st, Validator: validator, Now: clock.Now}
 	mux := http.NewServeMux()
 	mux.Handle("POST /sync/push", pusher.PushHandler())
+	mux.Handle("GET /sync/pull", (&syncapi.Puller{Store: st, Now: clock.Now}).PullHandler())
+	mux.Handle("GET /sync/devices", (&syncapi.Devices{Store: st, Now: clock.Now}).Handler())
 	mux.Handle("GET /api/projections/{feature}/{name}", &projections.Handler{Store: st, Registry: registry, Now: clock.Now})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -756,4 +758,108 @@ func TestUsageErrors(t *testing.T) {
 	if strings.Contains(r.stdout, "Usage") {
 		t.Fatal("usage text printed under --json")
 	}
+}
+
+// phonePull simulates the phone pulling everything with its device_id (D22).
+func (h *harness) phonePull(deviceID string) {
+	h.t.Helper()
+	req, err := http.NewRequest(http.MethodGet, h.srv.URL+"/sync/pull?since=0&device_id="+deviceID, nil)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+testToken)
+	resp, err := h.srv.Client().Do(req)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		h.t.Fatalf("phone pull status = %d", resp.StatusCode)
+	}
+}
+
+func hasNext(r result, prefix string) bool {
+	next, _ := r.out["next_actions"].([]any)
+	for _, n := range next {
+		m, _ := n.(map[string]any)
+		if cmd, _ := m["command"].(string); strings.HasPrefix(cmd, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestPhoneReceived(t *testing.T) {
+	h := newHarness(t)
+
+	// No phone has synced: the write is not received, with a warning and a
+	// next_action to check later.
+	first := h.mustOK("alarmas", "create", "--titulo", "Gimnasio", "--tipo", "otro", "--hora", "19:00", "--apply")
+	if first.data()["phone_received"] != false || first.data()["server_seq"] != float64(1) {
+		t.Fatalf("first write = %s", first.stdout)
+	}
+	if !hasNext(first, "cauce-cli server devices") || !strings.Contains(fmt.Sprint(first.out["warnings"]), "phone has not received") {
+		t.Fatalf("missing phone warning or next_action: %s", first.stdout)
+	}
+
+	devs := h.mustOK("server", "devices")
+	if devs.data()["phone_up_to_date"] != false || devs.data()["server_seq"] != float64(1) {
+		t.Fatalf("devices before pull = %s", devs.stdout)
+	}
+
+	// The phone pulls: now it is up to date.
+	h.phonePull("RMX5070")
+	devs = h.mustOK("server", "devices")
+	if devs.data()["phone_up_to_date"] != true {
+		t.Fatalf("devices after pull = %s", devs.stdout)
+	}
+	list, _ := devs.data()["devices"].([]any)
+	if len(list) != 2 {
+		t.Fatalf("devices = %s", devs.stdout)
+	}
+	cli, _ := list[0].(map[string]any)
+	phone, _ := list[1].(map[string]any)
+	if cli["device_id"] != "RMX5070" && phone["device_id"] != "RMX5070" {
+		t.Fatalf("phone missing: %s", devs.stdout)
+	}
+	if cli["device_id"] == "RMX5070" {
+		cli, phone = phone, cli
+	}
+	if cli["kind"] != "cli" || cli["last_push_at"] == nil || cli["last_pull_at"] != nil ||
+		phone["kind"] != "phone" || phone["pulled_through_seq"] != float64(1) || phone["up_to_date"] != true || phone["last_push_at"] != nil {
+		t.Fatalf("device rows = %s", devs.stdout)
+	}
+
+	// Applying again (all duplicates) reports the same server_seq, which the
+	// phone already has: received, no warning about the phone.
+	planned := h.mustOK("alarmas", "create", "--titulo", "Agua", "--tipo", "otro", "--hora", "09:00", "--dry-run")
+	planID := planned.data()["plan_id"].(string)
+	sent := h.mustOK("plan", "apply", "--plan-id", planID, "--apply")
+	if sent.data()["phone_received"] != false || sent.data()["server_seq"] != float64(2) {
+		t.Fatalf("second write = %s", sent.stdout)
+	}
+	h.phonePull("RMX5070")
+	again := h.mustOK("plan", "apply", "--plan-id", planID, "--apply")
+	if again.data()["duplicates"] != float64(1) || again.data()["server_seq"] != float64(2) || again.data()["phone_received"] != true {
+		t.Fatalf("duplicate apply = %s", again.stdout)
+	}
+	if hasNext(again, "cauce-cli server devices") || strings.Contains(fmt.Sprint(again.out["warnings"]), "phone has not received") {
+		t.Fatalf("received write still warns: %s", again.stdout)
+	}
+}
+
+func TestServerDevicesNoPhone(t *testing.T) {
+	h := newHarness(t)
+	devs := h.mustOK("server", "devices")
+	if devs.data()["phone_up_to_date"] != false || devs.data()["server_seq"] != float64(0) {
+		t.Fatalf("empty devices = %s", devs.stdout)
+	}
+	if list, _ := devs.data()["devices"].([]any); len(list) != 0 {
+		t.Fatalf("devices = %s", devs.stdout)
+	}
+	if !strings.Contains(fmt.Sprint(devs.out["warnings"]), "No phone") {
+		t.Fatalf("missing no-phone warning: %s", devs.stdout)
+	}
+	h.writeToken("wrong-token-000000000000000000000000000", 0o600)
+	h.expectErr(CodePermissionDenied, exitCodeFor(CodePermissionDenied), "server", "devices")
 }

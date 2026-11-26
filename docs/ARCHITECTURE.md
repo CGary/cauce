@@ -41,10 +41,14 @@ Protocolo mínimo, un usuario, varios productores (teléfono, web, server, worke
 
 ```
 POST /sync/push   { "events": [Envelope, ...] }
-                  → { "accepted": n, "duplicates": m }        400 si alguno no valida contra schema
+                  → { "accepted": n, "duplicates": m, "server_seq": s }   400 si alguno no valida contra schema
 
-GET  /sync/pull?since=<server_seq>
+GET  /sync/pull?since=<server_seq>[&device_id=<id>]
                   → { "events": [Envelope + server_seq, ...], "next_since": k }   máx. 500 por página
+
+GET  /sync/devices
+                  → { "now": "…Z", "server_seq": s,
+                      "devices": [ { "device_id", "last_push_at", "last_pull_at", "pulled_through_seq" } ] }
 ```
 
 - `server_seq` es un entero monótono asignado por el servidor al recibir. Es el cursor; el teléfono guarda el último que vio.
@@ -52,6 +56,7 @@ GET  /sync/pull?since=<server_seq>
 - El teléfono mantiene un **outbox**: eventos locales con `synced = 0`. `PushPullWorker` (WorkManager, con red, cada 15 min y al abrir la app) hace push del outbox, luego pull desde el cursor, y deduplica por `id` al insertar. Hay además un botón manual "Sincronizar".
 - La web no tiene outbox: envía a `POST /sync/push` con `device_id: "web"`, genera el `id` (UUID v7) y los ids de entidad, y el `ts` sale del reloj del navegador. Si el push falla, muestra el error y el usuario reintenta. Tras un push, relee las proyecciones de `GET /api/projections/...`.
 - Cómo llegan al teléfono los eventos escritos por la web: en el próximo pull (cada 15 min o al abrir la app). No hace falta que lleguen al instante. Todo feature con efectos de dispositivo (alarmas programadas, notificaciones, widgets, foreground services) debe re-aplicar esos efectos tras un pull que traiga eventos de sus tipos; es una regla que cada SPEC declara.
+- **Estado de sync visible (D22).** El servidor lleva, fuera del log, una tabla `device_sync` por `(user_id, device_id)`. Un push anota `last_push_at` para cada `device_id` del lote y responde `server_seq`, el mayor `server_seq` del usuario tras insertar (todo evento empujado, nuevo o duplicado, queda ≤ a él). Un pull con `device_id` (opcional, 1..64 caracteres; inválido = 400) anota `last_pull_at` y `pulled_through_seq` = el `next_since` devuelto; sin `device_id` no anota nada, así un teléfono viejo sigue funcionando. `GET /sync/devices` devuelve esa tabla ordenada por `device_id`, con horas RFC 3339 UTC (`null` = nunca). Un cambio llegó al dispositivo D cuando `D.pulled_through_seq >= server_seq` del push que lo mandó; «el teléfono» es todo dispositivo que no sea `web` ni `cli`. No es un evento ni una proyección: es contabilidad operativa y no se sincroniza.
 - Conflictos: un solo usuario, así que **last write wins por `ts`**. Los features modelan las ediciones como eventos de estado completo (como `alarma_modificada`: el estado entero, no un diff), de modo que no hay lógica de merge. Un pequeño skew de reloj entre dispositivos se acepta.
 
 ## 4. Blobs (audio, fotos)

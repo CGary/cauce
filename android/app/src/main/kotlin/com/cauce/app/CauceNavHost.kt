@@ -26,12 +26,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.cauce.core.events.cauceServices
-import com.cauce.core.sync.SyncFeedback
 import com.cauce.core.ui.Card
 import com.cauce.core.ui.CauceSpacing
 import com.cauce.core.ui.Screen
 import com.cauce.feature.alarmas.AlarmasRoutes
-import com.cauce.feature.alarmas.ui.SyncStatusText
 import com.cauce.feature.alarmas.ui.rememberAlarmasHomeSummary
 import com.cauce.feature.calendariogoogle.CalendarioGoogleRoutes
 import kotlinx.serialization.json.JsonArray
@@ -50,12 +48,8 @@ fun CauceNavHost(navController: NavHostController = rememberNavController()) {
     NavHost(navController = navController, startDestination = HOME) {
         composable(HOME) {
             val alarmas = rememberAlarmasHomeSummary()
-            val syncProblem by SyncFeedback.problem.collectAsStateWithLifecycle()
             Screen(title = "Cauce") {
-                SyncStatusText()
-                syncProblem?.let { message ->
-                    Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                }
+                SyncStatusRow(onClick = { navController.navigate(SYNC) })
                 HomeCard(
                     title = "Alarmas",
                     subtitle = alarmas.proxima,
@@ -82,6 +76,8 @@ fun CauceNavHost(navController: NavHostController = rememberNavController()) {
                 )
             }
         }
+
+        composable(SYNC) { SyncAttemptsScreen() }
 
         FeatureRegistry.features.forEach { feature ->
             with(feature) { navGraph(navController) }
@@ -131,3 +127,4 @@ private fun reunionesSubtitle(): String {
 }
 
 private const val HOME = "home"
+private const val SYNC = "sync"

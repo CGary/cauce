@@ -21,6 +21,7 @@ import kotlin.test.assertTrue
 class HttpSyncApiTest {
     private val token = "test-token-0123456789abcdefghijklmnop" // invented
     private val seen = Collections.synchronizedList(mutableListOf<Pair<String, String?>>())
+    private val queries = Collections.synchronizedList(mutableListOf<String>())
     private lateinit var server: ServerSocket
     @Volatile private var status = 200
 
@@ -38,7 +39,9 @@ class HttpSyncApiTest {
     /** One request per connection: enough HTTP/1.1 for HttpURLConnection. */
     private fun serve(socket: Socket) {
         val input = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
-        val path = input.readLine().orEmpty().split(" ").getOrElse(1) { "" }.substringBefore('?')
+        val target = input.readLine().orEmpty().split(" ").getOrElse(1) { "" }
+        val path = target.substringBefore('?')
+        if ('?' in target) queries += target.substringAfter('?')
         var auth: String? = null
         var length = 0
         while (true) {
@@ -107,6 +110,31 @@ class HttpSyncApiTest {
         assertEquals(before, SyncFeedback.problem.value)
         assertNull(SyncFeedback.messageFor(SyncHttpException(429, "")))
         assertNotNull(SyncFeedback.messageFor(SyncHttpException(400, "")))
+    }
+
+    @Test
+    fun `the pull URL carries the device id, URL-encoded`() {
+        assertEquals("http://h/sync/pull?since=7", pullUrl("http://h/", 7, null))
+        assertEquals("http://h/sync/pull?since=0&device_id=RMX5070", pullUrl("http://h", 0, "RMX5070"))
+        assertEquals(
+            "http://h/sync/pull?since=42&device_id=Pixel%207%20Pro%26x%3D1%2Fy",
+            pullUrl("http://h/", 42, "Pixel 7 Pro&x=1/y"),
+        )
+    }
+
+    @Test
+    fun `pull sends device_id to the server`() = runBlocking {
+        HttpSyncApi("http://127.0.0.1:${server.localPort}", apiToken = token, deviceId = "Pixel 7").pull(3)
+        assertEquals("since=3&device_id=Pixel%207", queries.single())
+    }
+
+    @Test
+    fun `push tolerates server_seq and unknown fields`() {
+        val decoded = com.cauce.core.events.CauceJson.wire.decodeFromString(
+            PushResponse.serializer(),
+            """{"accepted":2,"duplicates":1,"server_seq":412,"extra":true}""",
+        )
+        assertEquals(PushResponse(accepted = 2, duplicates = 1, serverSeq = 412), decoded)
     }
 
     @Test

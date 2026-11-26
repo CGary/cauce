@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * What the last sync attempt left for the UI, next to «Último evento» (D18). Only failures that
+ * The actionable message under Home's sync status line (D22). Only failures that
  * retrying will not fix are shown; network errors, 429 and 5xx stay silent because WorkManager
  * retries them. Lives in memory: the app runs a sync on every start, so it reappears there.
  */

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { API_BASE, AUTH_PROBLEM } from './api'
+import { DEVICES_KEY, PENDING_KEY, type PendingPush } from './devices'
 
 /** Error de validación del servidor: el mensaje exacto del 400 de /sync/push. */
 export class PushError extends Error {
@@ -91,9 +92,14 @@ export function buildEvent(
 }
 
 /** Cuerpo de `POST /sync/push`: los sobres completos, el servidor los valida contra el contrato. */
-export async function pushEvents(
-  events: EventEnvelope[],
-): Promise<{ accepted: number; duplicates: number }> {
+export interface PushResult {
+  accepted: number
+  duplicates: number
+  /** Mayor server_seq del log tras el push (D22). Ausente en un servidor que aún no lo envía. */
+  server_seq?: number
+}
+
+export async function pushEvents(events: EventEnvelope[]): Promise<PushResult> {
   let res: Response
   try {
     res = await fetch(`${API_BASE}/sync/push`, {
@@ -106,7 +112,7 @@ export async function pushEvents(
     throw new PushError(0, 'Sin respuesta del servidor')
   }
   if (res.ok) {
-    return (await res.json()) as { accepted: number; duplicates: number }
+    return (await res.json()) as PushResult
   }
   if (res.status === 401 || res.status === 403) {
     throw new PushError(res.status, `${AUTH_PROBLEM} (${res.status}).`)
@@ -138,14 +144,25 @@ export function shouldRetryPush(failureCount: number, error: unknown): boolean {
 /**
  * Mutation de push. Al confirmar el servidor invalida las queries de proyección
  * (`['projection', ...]`, las claves de `projectionQuery` en api.ts) para que las
- * vistas relean lo calculado server-side; la web no reimplementa proyecciones.
+ * vistas relean lo calculado server-side; la web no reimplementa proyecciones. Si el servidor
+ * devuelve `server_seq`, además deja pendiente el aviso «el teléfono aún no lo recibe».
  */
 export function usePushEvents() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: pushEvents,
-    onSuccess: () => {
+    onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ['projection'] })
+      if (typeof result.server_seq === 'number') {
+        // Recuerda el cambio hasta que un teléfono lo baje (D22); el aviso vive en el layout.
+        const previous = queryClient.getQueryData<PendingPush>(PENDING_KEY)
+        const keep = previous?.receivedAt === undefined ? (previous?.serverSeq ?? 0) : 0
+        queryClient.setQueryData<PendingPush>(PENDING_KEY, {
+          serverSeq: Math.max(keep, result.server_seq),
+          pushedAt: Date.now(),
+        })
+        void queryClient.invalidateQueries({ queryKey: DEVICES_KEY })
+      }
     },
     retry: shouldRetryPush,
   })

@@ -40,6 +40,42 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) (sql.R
 	)
 }
 
+const listDeviceSync = `-- name: ListDeviceSync :many
+SELECT user_id, device_id, last_push_at, last_pull_at, pulled_through_seq
+FROM device_sync
+WHERE user_id = ?
+ORDER BY device_id
+`
+
+func (q *Queries) ListDeviceSync(ctx context.Context, userID string) ([]DeviceSync, error) {
+	rows, err := q.db.QueryContext(ctx, listDeviceSync, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeviceSync{}
+	for rows.Next() {
+		var i DeviceSync
+		if err := rows.Scan(
+			&i.UserID,
+			&i.DeviceID,
+			&i.LastPushAt,
+			&i.LastPullAt,
+			&i.PulledThroughSeq,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEventsByUser = `-- name: ListEventsByUser :many
 SELECT server_seq, id, user_id, device_id, type, v, ts, payload, received_at
 FROM events
@@ -125,4 +161,59 @@ func (q *Queries) ListEventsSince(ctx context.Context, arg ListEventsSinceParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const maxServerSeq = `-- name: MaxServerSeq :one
+SELECT CAST(COALESCE(MAX(server_seq), 0) AS INTEGER) AS max_seq
+FROM events
+WHERE user_id = ?
+`
+
+func (q *Queries) MaxServerSeq(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, maxServerSeq, userID)
+	var max_seq int64
+	err := row.Scan(&max_seq)
+	return max_seq, err
+}
+
+const recordDevicePull = `-- name: RecordDevicePull :exec
+INSERT INTO device_sync (user_id, device_id, last_pull_at, pulled_through_seq)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(user_id, device_id) DO UPDATE SET
+    last_pull_at = excluded.last_pull_at,
+    pulled_through_seq = excluded.pulled_through_seq
+`
+
+type RecordDevicePullParams struct {
+	UserID           string
+	DeviceID         string
+	LastPullAt       sql.NullString
+	PulledThroughSeq sql.NullInt64
+}
+
+func (q *Queries) RecordDevicePull(ctx context.Context, arg RecordDevicePullParams) error {
+	_, err := q.db.ExecContext(ctx, recordDevicePull,
+		arg.UserID,
+		arg.DeviceID,
+		arg.LastPullAt,
+		arg.PulledThroughSeq,
+	)
+	return err
+}
+
+const recordDevicePush = `-- name: RecordDevicePush :exec
+INSERT INTO device_sync (user_id, device_id, last_push_at)
+VALUES (?, ?, ?)
+ON CONFLICT(user_id, device_id) DO UPDATE SET last_push_at = excluded.last_push_at
+`
+
+type RecordDevicePushParams struct {
+	UserID     string
+	DeviceID   string
+	LastPushAt sql.NullString
+}
+
+func (q *Queries) RecordDevicePush(ctx context.Context, arg RecordDevicePushParams) error {
+	_, err := q.db.ExecContext(ctx, recordDevicePush, arg.UserID, arg.DeviceID, arg.LastPushAt)
+	return err
 }

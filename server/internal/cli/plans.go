@@ -224,7 +224,20 @@ func (c *cmdCtx) send(p *Plan, summary string) (*success, error) {
 		return nil, err
 	}
 	changes := p.Changes
-	warnings := []string{"It reaches the phone on its next sync; the CLI cannot make the phone sync."}
+	// One /sync/devices read right after the push (D22). The write already
+	// succeeded, so a failed read only means "not known to be received".
+	phoneReceived := false
+	var warnings []string
+	devs, derr := cl.devices(c.ctx)
+	switch {
+	case derr != nil:
+		warnings = append(warnings, "Could not read /sync/devices to check whether the phone has it ("+derr.Message+").")
+	case res.ServerSeq > 0:
+		phoneReceived = devs.phoneHas(res.ServerSeq)
+	}
+	if !phoneReceived {
+		warnings = append(warnings, "The phone has not received it yet; it gets it on its next sync (the CLI cannot make the phone sync).")
+	}
 	if res.Accepted == 0 && res.Duplicates > 0 {
 		changes = []Change{}
 		warnings = append([]string{"The server already had these events (same ids): nothing new was written."}, warnings...)
@@ -236,6 +249,10 @@ func (c *cmdCtx) send(p *Plan, summary string) (*success, error) {
 		"accepted":   res.Accepted,
 		"duplicates": res.Duplicates,
 		"event_ids":  eventIDs(p.Events),
+		// server_seq: the change has reached a device once its
+		// pulled_through_seq is >= this (D22).
+		"server_seq":     res.ServerSeq,
+		"phone_received": phoneReceived,
 	}
 	if p.PlanID != "" {
 		data["plan_id"] = p.PlanID
@@ -248,6 +265,9 @@ func (c *cmdCtx) send(p *Plan, summary string) (*success, error) {
 	}
 	if len(next) == 0 {
 		next = append(next, NextAction{Command: "cauce-cli alarmas list --json", Reason: "See the active alarms."})
+	}
+	if !phoneReceived {
+		next = append(next, NextAction{Command: "cauce-cli server devices --json", Reason: "Check later whether the phone has received it (phone_received)."})
 	}
 	return &success{Summary: summary, Data: data, Warnings: warnings, Next: next}, nil
 }

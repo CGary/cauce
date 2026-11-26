@@ -109,12 +109,14 @@ func run() error {
 
 	pusher := &syncapi.Pusher{Store: st, Validator: validator}
 	puller := &syncapi.Puller{Store: st}
+	devices := &syncapi.Devices{Store: st}
 	projectionHandler := &projections.Handler{Store: st, Registry: registry}
 	blobHandler := &blobs.Handler{Presigner: blobs.New(cfg.R2)}
 
 	mux := http.NewServeMux()
 	mux.Handle("POST /sync/push", pusher.PushHandler())
 	mux.Handle("GET /sync/pull", puller.PullHandler())
+	mux.Handle("GET /sync/devices", devices.Handler())
 	mux.Handle("POST /blobs/presign", blobHandler)
 	mux.Handle("GET /api/projections/{feature}/{name}", projectionHandler)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

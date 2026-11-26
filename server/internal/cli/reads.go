@@ -16,7 +16,57 @@ func serverCommands() []*command {
 		Description: "Checks that the server answers GET /healthz and that the API token is accepted by reading one projection. Use it first when any other command fails with NETWORK_ERROR or PERMISSION_DENIED. It changes nothing. Returns base_url, healthz and auth; fails with NETWORK_ERROR (retryable) or PERMISSION_DENIED.",
 		Flags:       []flagSpec{tzFlag()},
 		Run:         runServerHealth,
+	}, {
+		Domain: "server", Verb: "devices", Kind: "read",
+		Short:        "When each device last synced, and whether the phone is up to date (D22).",
+		Description:  "Reads GET /sync/devices: for every device that synced (phone, web, cli), when it last pushed and pulled and up to which server_seq it has pulled. Use it after a write whose phone_received was false, to see whether the phone has it now: a write with server_seq S reached the phone once a phone device has pulled_through_seq >= S. It changes nothing. Returns now, server_seq, phone_up_to_date and devices with device_id, kind, last_push_at, last_pull_at, pulled_through_seq and up_to_date.",
+		DataRequired: []string{"now", "server_seq", "phone_up_to_date", "devices"},
+		Run:          runServerDevices,
 	}}
+}
+
+func runServerDevices(c *cmdCtx) (*success, error) {
+	cl, err := c.client()
+	if err != nil {
+		return nil, err
+	}
+	res, err := cl.devices(c.ctx)
+	if err != nil {
+		return nil, err
+	}
+	devices := make([]map[string]any, 0, len(res.Devices))
+	phones := 0
+	for _, d := range res.Devices {
+		kind := d.DeviceID
+		if isPhone(d.DeviceID) {
+			kind = "phone"
+			phones++
+		}
+		devices = append(devices, map[string]any{
+			"device_id":          d.DeviceID,
+			"kind":               kind,
+			"last_push_at":       d.LastPushAt,
+			"last_pull_at":       d.LastPullAt,
+			"pulled_through_seq": d.PulledThroughSeq,
+			"up_to_date":         d.PulledThroughSeq != nil && *d.PulledThroughSeq >= res.ServerSeq,
+		})
+	}
+	upToDate := res.phoneHas(res.ServerSeq)
+	var warnings []string
+	summary := fmt.Sprintf("%d device(s); the phone has everything up to server_seq %d.", len(devices), res.ServerSeq)
+	switch {
+	case phones == 0:
+		upToDate = false
+		summary = fmt.Sprintf("%d device(s); no phone has synced with device_id yet.", len(devices))
+		warnings = append(warnings, "No phone has reported a pull yet; an older app pulls without device_id and is not tracked.")
+	case !upToDate:
+		summary = fmt.Sprintf("%d device(s); the phone is behind server_seq %d.", len(devices), res.ServerSeq)
+	}
+	return &success{
+		Summary:  summary,
+		Data:     map[string]any{"now": res.Now, "server_seq": res.ServerSeq, "phone_up_to_date": upToDate, "devices": devices},
+		Warnings: warnings,
+	}, nil
 }
 
 func runServerHealth(c *cmdCtx) (*success, error) {
@@ -279,7 +329,13 @@ func runReunionesAviso(c *cmdCtx) (*success, error) {
 	} else {
 		res, serr = c.send(p, fmt.Sprintf("Set the aviso (%s) of 1 meeting series.", mode))
 		if serr == nil {
-			res.Next = []NextAction{{Command: "cauce-cli reuniones list --json", Reason: "Check the new aviso_en."}}
+			next := []NextAction{{Command: "cauce-cli reuniones list --json", Reason: "Check the new aviso_en."}}
+			for _, n := range res.Next {
+				if strings.HasPrefix(n.Command, "cauce-cli server devices") {
+					next = append(next, n)
+				}
+			}
+			res.Next = next
 		}
 	}
 	if serr != nil {

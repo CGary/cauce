@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.syncDataStore: DataStore<Preferences> by preferencesDataStore(name = "sync")
+internal val Context.syncDataStore: DataStore<Preferences> by preferencesDataStore(name = "sync")
 
 /** Reads and writes the `server_seq` cursor; the seam SyncEngine tests replace. */
 interface SyncCursorStore {

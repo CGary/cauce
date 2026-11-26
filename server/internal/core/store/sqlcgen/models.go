@@ -4,6 +4,18 @@
 
 package sqlcgen
 
+import (
+	"database/sql"
+)
+
+type DeviceSync struct {
+	UserID           string
+	DeviceID         string
+	LastPushAt       sql.NullString
+	LastPullAt       sql.NullString
+	PulledThroughSeq sql.NullInt64
+}
+
 type Event struct {
 	ServerSeq  int64
 	ID         string

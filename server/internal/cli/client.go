@@ -24,6 +24,35 @@ type client struct {
 type pushResult struct {
 	Accepted   int `json:"accepted"`
 	Duplicates int `json:"duplicates"`
+	// ServerSeq is 0 when the server predates D22.
+	ServerSeq int64 `json:"server_seq"`
+}
+
+// deviceRow is one device of GET /sync/devices (D22).
+type deviceRow struct {
+	DeviceID         string  `json:"device_id"`
+	LastPushAt       *string `json:"last_push_at"`
+	LastPullAt       *string `json:"last_pull_at"`
+	PulledThroughSeq *int64  `json:"pulled_through_seq"`
+}
+
+type devicesResult struct {
+	Now       string      `json:"now"`
+	ServerSeq int64       `json:"server_seq"`
+	Devices   []deviceRow `json:"devices"`
+}
+
+// isPhone: every device that is not the web or the CLI is a phone (D22).
+func isPhone(deviceID string) bool { return deviceID != "web" && deviceID != DeviceID }
+
+// phoneHas reports whether some phone has pulled through seq.
+func (d devicesResult) phoneHas(seq int64) bool {
+	for _, dev := range d.Devices {
+		if isPhone(dev.DeviceID) && dev.PulledThroughSeq != nil && *dev.PulledThroughSeq >= seq {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *client) logf(format string, args ...any) {
@@ -71,6 +100,22 @@ func (c *client) push(ctx context.Context, events []event.Envelope) (pushResult,
 	var res pushResult
 	if err := json.Unmarshal(body, &res); err != nil {
 		return pushResult{}, errorf(CodeInternal, "/sync/push returned an unexpected body")
+	}
+	return res, nil
+}
+
+// devices runs GET /sync/devices.
+func (c *client) devices(ctx context.Context) (devicesResult, *cliError) {
+	body, cerr := c.do(ctx, http.MethodGet, c.baseURL+"/sync/devices", nil, true)
+	if cerr != nil {
+		return devicesResult{}, cerr
+	}
+	var res devicesResult
+	if err := json.Unmarshal(body, &res); err != nil {
+		return devicesResult{}, errorf(CodeInternal, "/sync/devices returned an unexpected body")
+	}
+	if res.Devices == nil {
+		res.Devices = []deviceRow{}
 	}
 	return res, nil
 }

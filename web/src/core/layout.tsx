@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import type { FeatureModule } from './feature'
+import { PhoneCard, PhoneNotice } from './PhoneStatus'
 import { formatAgo, useNow, useSyncStatus } from './sync'
 import { Spinner } from './ui'
 
@@ -90,6 +91,10 @@ export function Layout({ features }: { features: FeatureModule[] }) {
               </div>
             ))}
           </nav>
+        </div>
+        <div className="mx-auto flex max-w-page flex-wrap items-center gap-2 px-4 pb-3 sm:px-6 lg:pt-1">
+          <PhoneCard />
+          <PhoneNotice />
         </div>
         <div
           aria-hidden="true"

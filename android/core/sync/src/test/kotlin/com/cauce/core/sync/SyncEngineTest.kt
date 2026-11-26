@@ -24,8 +24,11 @@ class SyncEngineTest {
             ),
         )
 
-        val pulled = SyncEngine(store, api, cursor).sync()
+        val progress = SyncProgress()
+        val pulled = SyncEngine(store, api, cursor).sync(progress)
 
+        assertEquals(504, progress.pulled)
+        assertEquals(0, progress.pushed)
         assertEquals(4, api.calls)
         assertEquals(504, store.appended.size)
         assertEquals(514L, cursor.value)

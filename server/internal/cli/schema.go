@@ -127,8 +127,10 @@ func outputSchema(c *command) map[string]any {
 					"event": map[string]any{"type": "string"},
 				},
 			}},
-			"accepted":   map[string]any{"type": "integer", "minimum": 0},
-			"duplicates": map[string]any{"type": "integer", "minimum": 0},
+			"accepted":       map[string]any{"type": "integer", "minimum": 0},
+			"duplicates":     map[string]any{"type": "integer", "minimum": 0},
+			"server_seq":     map[string]any{"type": "integer", "minimum": 0, "description": "Highest server_seq after the push; the change reached a device once its pulled_through_seq is >= this (D22)."},
+			"phone_received": map[string]any{"type": "boolean", "description": "Whether a phone device had already pulled through server_seq right after the push."},
 		}
 	}
 	return map[string]any{

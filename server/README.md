@@ -14,12 +14,12 @@ internal/core/event/       Envelope, JSON, embedded JSON Schema validation
 internal/core/store/       SQLite (modernc.org/sqlite), sqlc-generated queries
 internal/core/projection/  Projection interface + registry ("<feature>.<name>")
 internal/core/cors/        Minimal CORS middleware for the web console (CAUCE_CORS_ORIGIN)
-internal/sync/             POST /sync/push, GET /sync/pull
+internal/sync/             POST /sync/push, GET /sync/pull, GET /sync/devices (D22)
 internal/blobs/            POST /blobs/presign (presigned PUT for R2)
 internal/projections/      GET /api/projections/{feature}/{name}
 internal/worker/           Worker interface + ticker loop
 internal/conformance/      fixture runner against schema/features/*/fixtures
-migrations/                0001_events.sql, embedded at startup
+migrations/                0001_events.sql, 0002_device_sync.sql, embedded at startup
 ```
 
 Feature packages (`internal/<id>`) are added by `/feature <id>`; phase 2 ships

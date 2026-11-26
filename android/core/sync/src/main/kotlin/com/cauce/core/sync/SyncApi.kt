@@ -10,12 +10,18 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 @Serializable
 data class PushRequest(val events: List<Envelope>)
 
 @Serializable
-data class PushResponse(val accepted: Int = 0, val duplicates: Int = 0)
+data class PushResponse(
+    val accepted: Int = 0,
+    val duplicates: Int = 0,
+    /** Highest server position after the insert (D22). Absent on older servers. */
+    @SerialName("server_seq") val serverSeq: Long? = null,
+)
 
 @Serializable
 data class PullResponse(
@@ -46,11 +52,13 @@ interface SyncApi {
 
 /**
  * Talks to the Go server directly. Every call carries `Authorization: Bearer <apiToken>` (D20);
- * the presigned PUT to object storage does not, because it goes to another host.
+ * the presigned PUT to object storage does not, because it goes to another host. Pulls carry
+ * [deviceId] so the server can record when this device last pulled (D22).
  */
 class HttpSyncApi(
     baseUrl: String,
     apiToken: String,
+    private val deviceId: String? = null,
     extraHeaders: Map<String, String> = emptyMap(),
 ) : SyncApi {
     private val base = baseUrl.trimEnd('/')
@@ -63,7 +71,7 @@ class HttpSyncApi(
     }
 
     override suspend fun pull(since: Long): PullResponse {
-        val response = HttpTransport.request("GET", "$base/sync/pull?since=$since", null, headers)
+        val response = HttpTransport.request("GET", pullUrl(base, since, deviceId), null, headers)
         return CauceJson.wire.decodeFromString(PullResponse.serializer(), response)
     }
 
@@ -75,6 +83,13 @@ class HttpSyncApi(
         val response = HttpTransport.request("POST", "$base/blobs/presign", body, headers)
         return CauceJson.wire.decodeFromString(PresignResponse.serializer(), response)
     }
+}
+
+/** `GET /sync/pull?since=<n>&device_id=<id>`; the id is URL-encoded and omitted when null. */
+internal fun pullUrl(base: String, since: Long, deviceId: String?): String {
+    val url = "${base.trimEnd('/')}/sync/pull?since=$since"
+    if (deviceId == null) return url
+    return url + "&device_id=" + URLEncoder.encode(deviceId, "UTF-8").replace("+", "%20")
 }
 
 /** The header every server call carries. A blank token is a wiring bug, not a runtime state. */

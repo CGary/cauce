@@ -34,9 +34,7 @@ export default function ReunionesView() {
       await push.mutateAsync([
         buildEvent('aviso_reunion_editado', payload, { v: V_AVISO_REUNION_EDITADO }),
       ])
-      setNotice(
-        'Aviso guardado. Vale para toda la serie. El teléfono lo aplica en su próximo pull.',
-      )
+      setNotice('Aviso guardado. Vale para toda la serie.')
       setEditing(null)
     } catch {
       setNotice(null)

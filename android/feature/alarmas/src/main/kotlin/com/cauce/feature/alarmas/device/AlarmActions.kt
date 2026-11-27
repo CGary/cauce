@@ -3,7 +3,9 @@ package com.cauce.feature.alarmas.device
 import android.content.Context
 import android.util.Log
 import com.cauce.core.events.cauceServices
+import com.cauce.feature.alarmas.RING_DURATION
 import com.cauce.feature.alarmas.SnoozeOutcome
+import com.cauce.feature.alarmas.TIMEOUT_TOLERANCE
 import com.cauce.feature.alarmas.alarmaAtendida
 import com.cauce.feature.alarmas.fireEvents
 import com.cauce.feature.alarmas.gcalAlarm
@@ -14,6 +16,7 @@ import com.cauce.feature.alarmas.foldAlarms
 import com.cauce.feature.alarmas.hasAtendida
 import com.cauce.feature.alarmas.nextSnoozeOutcome
 import com.cauce.feature.alarmas.shouldRing
+import com.cauce.feature.alarmas.timeoutRemaining
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
@@ -64,7 +67,7 @@ internal object AlarmActions {
         )
 
         logFailure("arming the timeout of $alarmaId") {
-            AlarmScheduler(context).scheduleTimeout(alarmaId, programadaPara, now.plus(2, ChronoUnit.MINUTES))
+            AlarmScheduler(context).scheduleTimeout(alarmaId, programadaPara, now.plus(RING_DURATION))
         }
         // Bounded, so a slow reprogram (cold start, another reschedule holding the lock) cannot
         // delay the sound past the background-start allowance of the alarm; it then runs after.
@@ -158,10 +161,24 @@ internal object AlarmActions {
         AlarmNotifications.cancel(context, alarmaId)
     }
 
-    /** Two minutes ringing with no answer: the occurrence stays `ignorada` (SPEC 2.3). */
+    /**
+     * Two minutes ringing with no answer: the occurrence stays `ignorada` (SPEC 2.3). The cut
+     * counts from the latest `alarma_disparada`; a backup timeout delivered early (ColorOS has
+     * delivered the 2-minute one ~5 s after firing) is re-armed for the time left and does
+     * nothing else (SPEC §8).
+     */
     suspend fun timeout(context: Context, alarmaId: String, programadaPara: String) {
         val services = context.cauceServices()
-        val events = services.eventStore.observeByTypes(setOf("alarma_atendida")).first()
+        val events = services.eventStore
+            .observeByTypes(setOf("alarma_atendida", "alarma_disparada")).first()
+        val now = Instant.now()
+        val remaining = timeoutRemaining(events, alarmaId, programadaPara, now)
+        if (remaining != null && !hasAtendida(events, alarmaId, programadaPara)) {
+            Log.i(AlarmasRuntime.TAG, "timeout of $alarmaId early by ${remaining.seconds} s: re-armed")
+            AlarmScheduler(context)
+                .scheduleTimeout(alarmaId, programadaPara, now.plus(remaining).plus(TIMEOUT_TOLERANCE))
+            return
+        }
         if (!hasAtendida(events, alarmaId, programadaPara)) {
             services.eventStore.append(
                 listOf(

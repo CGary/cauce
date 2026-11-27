@@ -17,6 +17,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.cauce.core.events.cauceServices
+import com.cauce.feature.alarmas.RING_DURATION
 import com.cauce.feature.alarmas.RingingKey
 import com.cauce.feature.alarmas.RingingSet
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -266,7 +267,7 @@ class AlarmRingingService : Service() {
         private const val EXTRA_NOTIFICATION = "notification"
         private const val EXTRA_NOTIFICATION_ID = "notification_id"
         private const val EXTRA_FALLBACK_NOTIFICATION = "fallback_notification"
-        private const val RING_MILLIS = 2 * 60 * 1000L
+        private val RING_MILLIS = RING_DURATION.toMillis()
         private const val WAKE_LOCK_MILLIS = 3 * 60 * 1000L
         private val VIBRATION_PATTERN = longArrayOf(0, 500, 500)
         private val ALARM_ATTRIBUTES = AudioAttributes.Builder()

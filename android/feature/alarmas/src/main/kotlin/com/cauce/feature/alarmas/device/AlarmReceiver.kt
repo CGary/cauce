@@ -3,7 +3,9 @@ package com.cauce.feature.alarmas.device
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 /**
  * Entry point for the firing, the 2-minute timeout and the two notification actions. Receivers
@@ -17,6 +19,11 @@ class AlarmReceiver : BroadcastReceiver() {
         val alarmaId = intent.getStringExtra(EXTRA_ALARMA_ID) ?: return
         val programadaPara = intent.getStringExtra(EXTRA_PROGRAMADA_PARA) ?: return
         val snoozed = intent.getBooleanExtra(EXTRA_SNOOZED, false)
+        Log.i(
+            AlarmasRuntime.TAG,
+            "received ${intent.action?.substringAfterLast('.')} for $alarmaId at ${Instant.now()}" +
+                " (programada_para $programadaPara, snoozed $snoozed)",
+        )
         val pendingResult = goAsync()
         val appContext = context.applicationContext
         AlarmasRuntime.scope.launch {

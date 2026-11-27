@@ -12,12 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -25,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import com.cauce.core.events.cauceServices
-import com.cauce.core.ui.BigButton
 import com.cauce.core.ui.CauceSpacing
 import com.cauce.core.ui.CauceTheme
 import com.cauce.feature.alarmas.Alarm
@@ -35,7 +34,8 @@ import kotlinx.coroutines.launch
 
 /**
  * The full-screen UI behind the notification's `fullScreenIntent` (SPEC 2.3): shows over the
- * lock screen with the two actions, Hecho and Posponer 10 min. The buttons run the exact same
+ * lock screen with the two actions, Hecho and Posponer 10 min. Both need a ~1 s hold
+ * ([HoldButton]) so pocket touches cannot attend the alarm (SPEC §8); they run the exact same
  * logic as the notification actions.
  */
 class AlarmAlertActivity : ComponentActivity() {
@@ -130,24 +130,34 @@ private fun AlarmAlertScreen(alarmaId: String, programadaPara: String, onDone: (
                 textAlign = TextAlign.Center,
             )
         }
-        BigButton(
-            text = "Hecho",
-            onClick = {
-                scope.launch {
-                    AlarmActions.hecho(context, alarmaId, programadaPara)
-                    onDone()
-                }
-            },
-        )
-        TextButton(
-            onClick = {
-                scope.launch {
-                    AlarmActions.posponer(context, alarmaId, programadaPara)
-                    onDone()
-                }
-            },
-        ) {
-            Text("Posponer 10 min", style = MaterialTheme.typography.titleMedium)
+        var hint by remember { mutableStateOf(false) }
+        var busy by remember { mutableStateOf(false) }
+        fun act(action: suspend () -> Unit) {
+            if (busy) return
+            busy = true
+            scope.launch {
+                action()
+                onDone()
+            }
         }
+        HoldButton(
+            text = "Hecho",
+            onConfirmed = { act { AlarmActions.hecho(context, alarmaId, programadaPara) } },
+            onShortPress = { hint = true },
+        )
+        HoldButton(
+            text = "Posponer 10 min",
+            onConfirmed = { act { AlarmActions.posponer(context, alarmaId, programadaPara) } },
+            onShortPress = { hint = true },
+            container = MaterialTheme.colorScheme.secondaryContainer,
+            content = MaterialTheme.colorScheme.onSecondaryContainer,
+            fill = MaterialTheme.colorScheme.secondary.copy(alpha = 0.35f),
+        )
+        Text(
+            text = "Mantén presionado 1 segundo",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (hint) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
